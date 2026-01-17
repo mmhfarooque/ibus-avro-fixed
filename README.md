@@ -77,6 +77,9 @@ using the source code in this repository.
 	`IBus preference`. Now `Input method` -> `Add` -> `Bangla` -> `Avro`. One may need to logout again to see the changes.
 
 ## Usage
+
+**Older versions of GNOME, Cinnamon, and present version of other DEs**:
+
  1. Run __IBus__ (`Applications -> System Tools -> IBus`) from _Dash_
  2. Open __IBus__ `Preferences` from the top panel icon  
  3. Go to `Input method`
@@ -86,7 +89,9 @@ using the source code in this repository.
  7. Now Press `Ctrl+Space` to toggle between _English_ and _Avro_ (Bengali)
  8. Enjoy __Avro Phonetic!__
 
-It requires additional steps to configure ibus-avro in Manjaro GNOME (and possibly other distros using a very recent GNOME version). See [this](https://github.com/sarim/ibus-avro/issues/202#issuecomment-1719779633) comment for more details.
+**Recent GNOME versions**: It requires additional steps to configure ibus-avro in Manjaro GNOME (and possibly other distros using a very recent GNOME version). See [this](https://github.com/sarim/ibus-avro/issues/202#issuecomment-1719779633) comment for more details.
+
+**Recent Cinnamon versions**: See [this comment](https://github.com/sarim/ibus-avro/issues/226#issuecomment-3762641612).
 
 ## Contributors
  
