@@ -259,7 +259,7 @@ class AvroManagerWindow(Adw.ApplicationWindow):
 
         self.switch_shortcut_row = Adw.ActionRow(
             title="Switch Shortcut",
-            subtitle="Loading...",
+            subtitle="Checking...",
         )
         self.switch_shortcut_row.add_prefix(Gtk.Image.new_from_icon_name("input-keyboard-symbolic"))
         group.add(self.switch_shortcut_row)

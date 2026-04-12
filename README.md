@@ -88,6 +88,8 @@ python3 avro-manager.py     # Launch
 
 Or search **"Avro"** in your app launcher after setup.
 
+![Avro Phonetic Manager](screenshot.png)
+
 The GUI lets you:
 - View status: iBus running, Avro registered, session type, input sources
 - Configure Super+Space input switching with one click
