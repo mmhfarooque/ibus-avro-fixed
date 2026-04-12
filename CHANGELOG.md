@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.2.1] - 2026-04-12
+
+### Changed
+- **Single command install** — `install.sh` now includes GUI setup (step 7/7): installs Python GTK4 deps, creates desktop shortcut, and auto-launches the manager. No separate `setup-gui.sh` needed. One command does everything: `git clone` + `bash install.sh`.
+
+---
+
 ## [2.2.0] - 2026-04-12
 
 ### Added
