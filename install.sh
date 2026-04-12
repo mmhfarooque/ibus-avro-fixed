@@ -92,7 +92,7 @@ with open('$MAIN_GJS') as f:
 # Match both: single-line and multi-line formats
 content = re.sub(
     r'(//\s*)?capture the shift key\n\s*if \(keycode == 42\) \{\s*\n?\s*return true;\s*\n?\s*\}',
-    'Pass through Left Shift (42) and Right Shift (54)\\n        if (keycode == 42 || keycode == 54) {\\n            return false;\\n        }',
+    '// Pass through Left Shift (42) and Right Shift (54)\\n        if (keycode == 42 || keycode == 54) {\\n            return false;\\n        }',
     content
 )
 # Also handle single-line format
@@ -155,7 +155,7 @@ import re
 with open('$FILE') as f:
     c = f.read()
 c = re.sub(r'(//\s*)?capture the shift key\n\s*if \(keycode == 42\) \{\s*\n?\s*return true;\s*\n?\s*\}',
-    'Pass through Left Shift (42) and Right Shift (54)\n        if (keycode == 42 || keycode == 54) {\n            return false;\n        }', c)
+    '// Pass through Left Shift (42) and Right Shift (54)\n        if (keycode == 42 || keycode == 54) {\n            return false;\n        }', c)
 c = c.replace('if (keycode == 42) { return true; }', 'if (keycode == 42 || keycode == 54) { return false; }')
 with open('$FILE', 'w') as f:
     f.write(c)
