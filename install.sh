@@ -71,30 +71,45 @@ echo "[2/6] Fixing Left Shift / Right Shift bug..."
 MAIN_GJS="$INSTALL_DIR/main-gjs.js"
 if [ -f "$MAIN_GJS" ]; then
     # Fix keycode 42 (Left Shift): return true → return false
-    if grep -q 'if (keycode == 42) {' "$MAIN_GJS"; then
-        if grep -q 'keycode == 42) { return true' "$MAIN_GJS"; then
-            sudo sed -i 's/if (keycode == 42) { return true; }/if (keycode == 42 || keycode == 54) { return false; }/' "$MAIN_GJS"
-            ok "Left Shift + Right Shift fix applied"
-        elif grep -q 'keycode == 42.*keycode == 54.*return false' "$MAIN_GJS"; then
+    # Handles BOTH single-line and multi-line formats
+    if grep -q 'keycode == 42' "$MAIN_GJS"; then
+        if grep -q 'keycode == 54' "$MAIN_GJS" && grep -A1 'keycode == 42' "$MAIN_GJS" | grep -q 'return false'; then
             ok "Shift fix already applied"
         else
-            ok "Shift key handling already modified"
+            # Replace the entire block (works for both single-line and multi-line)
+            sudo python3 -c "
+import re
+with open('$MAIN_GJS') as f:
+    content = f.read()
+# Match both: single-line and multi-line formats
+content = re.sub(
+    r'(//\s*)?capture the shift key\n\s*if \(keycode == 42\) \{\s*\n?\s*return true;\s*\n?\s*\}',
+    'Pass through Left Shift (42) and Right Shift (54)\\n        if (keycode == 42 || keycode == 54) {\\n            return false;\\n        }',
+    content
+)
+# Also handle single-line format
+content = content.replace(
+    'if (keycode == 42) { return true; }',
+    'if (keycode == 42 || keycode == 54) { return false; }'
+)
+with open('$MAIN_GJS', 'w') as f:
+    f.write(content)
+"
+            if grep -A1 'keycode == 42' "$MAIN_GJS" | grep -q 'return false'; then
+                ok "Left Shift + Right Shift fix applied"
+            else
+                warn "Patch may not have applied correctly — check manually"
+            fi
         fi
     else
-        # May be our fork version — check if already fixed
-        if grep -q 'keycode == 54.*return false' "$MAIN_GJS"; then
-            ok "Shift fix already present (fork version)"
-        else
-            warn "Could not find keycode 42 handler — file may have changed"
-        fi
+        warn "Could not find keycode 42 handler — file structure may have changed"
     fi
 
     # Disable ALL debug print statements (keypress, orientation, candidate clicks)
     if grep -qE '^\s*print\s*\(' "$MAIN_GJS"; then
-        sudo sed -i 's|^\(\s*\)print\s*(|&|' "$MAIN_GJS"  # no-op to check
         # Comment out all active print() calls except the IBus bus error message
         sudo sed -i '/Exiting because IBus/!s|^\(\s*\)print\s*(|\1//print(|' "$MAIN_GJS"
-        ok "Disabled debug logging (all print statements)"
+        ok "Disabled debug logging"
     fi
 else
     fail "$MAIN_GJS not found"
@@ -125,8 +140,18 @@ sudo tee /usr/local/bin/fix-ibus-avro.sh > /dev/null << 'PATCHSCRIPT'
 FILE="/usr/share/ibus-avro/main-gjs.js"
 if [ -f "$FILE" ]; then
     # Fix Left Shift (keycode 42) and Right Shift (keycode 54)
-    if grep -q 'keycode == 42) { return true' "$FILE"; then
-        sed -i 's/if (keycode == 42) { return true; }/if (keycode == 42 || keycode == 54) { return false; }/' "$FILE"
+    # Handles both single-line and multi-line formats
+    if grep -q 'keycode == 42' "$FILE" && grep -A1 'keycode == 42' "$FILE" | grep -q 'return true'; then
+        python3 -c "
+import re
+with open('$FILE') as f:
+    c = f.read()
+c = re.sub(r'(//\s*)?capture the shift key\n\s*if \(keycode == 42\) \{\s*\n?\s*return true;\s*\n?\s*\}',
+    'Pass through Left Shift (42) and Right Shift (54)\n        if (keycode == 42 || keycode == 54) {\n            return false;\n        }', c)
+c = c.replace('if (keycode == 42) { return true; }', 'if (keycode == 42 || keycode == 54) { return false; }')
+with open('$FILE', 'w') as f:
+    f.write(c)
+"
     fi
     # Disable all debug print statements (except IBus bus error)
     sed -i '/Exiting because IBus/!s|^\(\s*\)print\s*(|\1//print(|' "$FILE"

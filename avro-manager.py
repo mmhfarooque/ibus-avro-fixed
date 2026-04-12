@@ -84,10 +84,12 @@ def is_shift_fix_applied():
     try:
         with open(MAIN_GJS) as f:
             content = f.read()
-            # Fixed if keycode 42 returns false (or includes 54)
-            if "keycode == 42" in content:
-                return "return false" in content.split("keycode == 42")[1].split("\n")[0]
-            return False
+            if "keycode == 42" not in content:
+                return False
+            # Get the block after keycode == 42 (next few lines)
+            after = content.split("keycode == 42")[1][:200]
+            # Fixed if it returns false (not true) — check multi-line
+            return "return false" in after and "return true" not in after
     except FileNotFoundError:
         return False
 
@@ -160,7 +162,9 @@ def get_switch_shortcut():
     if rc == 0 and out:
         # Parse ['<Super>space'] format
         match = re.search(r"'([^']+)'", out)
-        return match.group(1) if match else out
+        shortcut = match.group(1) if match else out
+        # Escape angle brackets so GTK doesn't parse as Pango markup
+        return shortcut.replace("<", "Super + ").replace(">", "")
     return "Not set"
 
 
@@ -578,6 +582,13 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         threading.Thread(target=do_refresh, daemon=True).start()
 
     def _apply_refresh(self, d):
+        try:
+            return self._do_apply_refresh(d)
+        except Exception as e:
+            print(f"UI refresh error: {e}")
+        return False
+
+    def _do_apply_refresh(self, d):
         # Status
         self.status_ibus.set_subtitle("Running" if d["ibus"] else "Not running")
         if d["avro"] and d["registered"]:
