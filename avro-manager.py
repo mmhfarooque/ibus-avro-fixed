@@ -2,16 +2,28 @@
 """
 Avro Phonetic Manager — Full GUI for ibus-avro-fixed.
 
-Status, input switching, typing settings, fix management, and maintenance.
+Fixes upstream ibus-avro for Ubuntu Wayland / GNOME 50+:
+  - Left Shift key fix (keycode 42 was consumed by the engine)
+  - Right Shift key fix (keycode 54)
+  - Super+Space input switching (X11 key grabs don't work on Wayland)
+  - GTK4/libadwaita preferences (replaces broken GTK3 prefs)
+  - APT hook for persistence across system updates
+
 Uses GTK4 + libadwaita for native GNOME look.
 """
 
 import gi
+import logging
+import logging.handlers
 import os
 import re
+import shlex
 import signal
 import subprocess
+import sys
+import tempfile
 import threading
+import time
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
@@ -23,6 +35,32 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 INSTALL_DIR = "/usr/share/ibus-avro"
 MAIN_GJS = os.path.join(INSTALL_DIR, "main-gjs.js")
 
+# ============================================================================
+# Logging — all events to ~/.local/share/avro-manager/avro.log
+# ============================================================================
+
+LOG_DIR = os.path.join(os.path.expanduser("~"), ".local", "share", "avro-manager")
+LOG_FILE = os.path.join(LOG_DIR, "avro.log")
+os.makedirs(LOG_DIR, exist_ok=True)
+
+log = logging.getLogger("avro")
+log.setLevel(logging.DEBUG)
+
+_fh = logging.handlers.RotatingFileHandler(LOG_FILE, maxBytes=1_000_000, backupCount=3)
+_fh.setFormatter(logging.Formatter(
+    "%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+))
+log.addHandler(_fh)
+
+_sh = logging.StreamHandler()
+_sh.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
+_sh.setLevel(logging.INFO)
+log.addHandler(_sh)
+
+# ============================================================================
+# Version
+# ============================================================================
+
 def get_version():
     try:
         with open(os.path.join(SCRIPT_DIR, "VERSION")) as f:
@@ -32,25 +70,38 @@ def get_version():
 
 APP_VERSION = get_version()
 
-
 # ============================================================================
 # Helper functions
 # ============================================================================
 
+
 def run_cmd(cmd, timeout=10):
+    """Run a command and return (returncode, stdout, stderr)."""
+    cmd_str = " ".join(cmd) if isinstance(cmd, list) else cmd
+    log.debug(f"CMD: {cmd_str} (timeout={timeout}s)")
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        if r.returncode != 0:
+            log.warning(f"CMD FAILED (rc={r.returncode}): {cmd_str} | stdout={r.stdout.strip()[:200]!r} | stderr={r.stderr.strip()[:200]!r}")
+        else:
+            log.debug(f"CMD OK: {cmd_str}")
         return r.returncode, r.stdout.strip(), r.stderr.strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-        return 1, "", str(e)
+    except subprocess.TimeoutExpired:
+        log.error(f"CMD TIMEOUT ({timeout}s): {cmd_str}")
+        return 1, "", f"Command timed out after {timeout}s"
+    except FileNotFoundError:
+        log.error(f"CMD NOT FOUND: {cmd_str}")
+        return 1, "", f"Command not found: {cmd[0]}"
 
 
 def run_as_root(cmd_str):
-    return run_cmd(["pkexec", "bash", "-c", cmd_str], timeout=60)
+    """Run a shell command as root via pkexec."""
+    log.info(f"ROOT CMD: {cmd_str}")
+    return run_cmd(["pkexec", "bash", "-c", cmd_str], timeout=120)
 
 
 def is_ibus_running():
-    rc, out, _ = run_cmd(["pgrep", "-x", "ibus-daemon"])
+    rc, _, _ = run_cmd(["pgrep", "-x", "ibus-daemon"])
     return rc == 0
 
 
@@ -86,9 +137,7 @@ def is_shift_fix_applied():
             content = f.read()
             if "keycode == 42" not in content:
                 return False
-            # Get the block after keycode == 42 (next few lines)
             after = content.split("keycode == 42")[1][:200]
-            # Fixed if it returns false (not true) — check multi-line
             return "return false" in after and "return true" not in after
     except FileNotFoundError:
         return False
@@ -120,7 +169,6 @@ def is_wayland_switching_configured():
 
 
 def is_gtk4_prefs_installed():
-    """Check if pref.js has GTK4 imports."""
     pref_path = os.path.join(INSTALL_DIR, "pref.js")
     try:
         with open(pref_path) as f:
@@ -131,7 +179,6 @@ def is_gtk4_prefs_installed():
 
 
 def get_avro_settings():
-    """Read current Avro GSettings."""
     settings = {}
     schema = "com.omicronlab.avro"
     for key in ["switch-preview", "switch-dict", "switch-newline"]:
@@ -160,10 +207,8 @@ def get_switch_shortcut():
         "gsettings", "get", "org.gnome.desktop.wm.keybindings", "switch-input-source"
     ])
     if rc == 0 and out:
-        # Parse ['<Super>space'] format
         match = re.search(r"'([^']+)'", out)
         shortcut = match.group(1) if match else out
-        # Escape angle brackets so GTK doesn't parse as Pango markup
         return shortcut.replace("<", "Super + ").replace(">", "")
     return "Not set"
 
@@ -172,12 +217,22 @@ def get_switch_shortcut():
 # Main Application
 # ============================================================================
 
+
 class AvroManagerApp(Adw.Application):
     def __init__(self):
         super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.FLAGS_NONE)
         self.connect("activate", self.on_activate)
+        self.win = None
 
     def on_activate(self, app):
+        if self.win is not None:
+            log.info("Window already open — bringing to front")
+            self.win.present()
+            return
+        log.info(f"=== Avro Phonetic Manager v{APP_VERSION} starting ===")
+        log.info(f"User: {os.environ.get('USER', 'unknown')} | PID: {os.getpid()}")
+        log.info(f"Session: {get_session_type()} | Script dir: {SCRIPT_DIR}")
+        log.info(f"Log file: {LOG_FILE}")
         self.win = AvroManagerWindow(application=app)
         self.win.present()
 
@@ -262,20 +317,17 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         parent.append(group)
 
         self.switch_shortcut_row = Adw.ActionRow(
-            title="Switch Shortcut",
-            subtitle="Checking...",
+            title="Switch Shortcut", subtitle="Checking...",
         )
         self.switch_shortcut_row.add_prefix(Gtk.Image.new_from_icon_name("input-keyboard-symbolic"))
         group.add(self.switch_shortcut_row)
 
         self.switch_back_row = Adw.ActionRow(
-            title="Switch Back",
-            subtitle="Shift + Super + Space",
+            title="Switch Back", subtitle="Shift + Super + Space",
         )
         self.switch_back_row.add_prefix(Gtk.Image.new_from_icon_name("go-previous-symbolic"))
         group.add(self.switch_back_row)
 
-        # Apply Wayland switching button
         apply_row = Adw.ActionRow(title="")
         self.wayland_btn = Gtk.Button(
             label="Configure Super+Space Switching",
@@ -286,26 +338,37 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         group.add(apply_row)
 
     def on_configure_switching(self, btn):
-        run_cmd(["gsettings", "set", "org.gnome.desktop.wm.keybindings",
-                 "switch-input-source", "['<Super>space']"])
-        run_cmd(["gsettings", "set", "org.gnome.desktop.wm.keybindings",
-                 "switch-input-source-backward", "['<Shift><Super>space']"])
-        run_cmd(["gsettings", "set", "org.freedesktop.ibus.general.hotkey",
-                 "trigger", "['']"])
+        log.info("User: Configure Super+Space switching")
+        btn.set_sensitive(False)
 
-        # Create autostart
-        autostart_dir = os.path.expanduser("~/.config/autostart")
-        os.makedirs(autostart_dir, exist_ok=True)
-        with open(os.path.join(autostart_dir, "ibus-avro-wayland-fix.desktop"), "w") as f:
-            f.write('[Desktop Entry]\nType=Application\nName=iBus Avro Wayland Fix\n')
-            f.write("Exec=bash -c \"gsettings set org.gnome.desktop.wm.keybindings ")
-            f.write("switch-input-source \\\"['<Super>space']\\\" && gsettings set ")
-            f.write("org.gnome.desktop.wm.keybindings switch-input-source-backward ")
-            f.write("\\\"['<Shift><Super>space']\\\"\"\n")
-            f.write("Hidden=false\nNoDisplay=true\nX-GNOME-Autostart-enabled=true\n")
+        def do_configure():
+            run_cmd(["gsettings", "set", "org.gnome.desktop.wm.keybindings",
+                     "switch-input-source", "['<Super>space']"])
+            run_cmd(["gsettings", "set", "org.gnome.desktop.wm.keybindings",
+                     "switch-input-source-backward", "['<Shift><Super>space']"])
+            run_cmd(["gsettings", "set", "org.freedesktop.ibus.general.hotkey",
+                     "trigger", "['']"])
 
-        self.show_toast("Super+Space switching configured")
-        self.refresh_switching()
+            autostart_dir = os.path.expanduser("~/.config/autostart")
+            os.makedirs(autostart_dir, exist_ok=True)
+            with open(os.path.join(autostart_dir, "ibus-avro-wayland-fix.desktop"), "w") as f:
+                f.write('[Desktop Entry]\nType=Application\nName=iBus Avro Wayland Fix\n')
+                f.write("Exec=bash -c \"gsettings set org.gnome.desktop.wm.keybindings ")
+                f.write("switch-input-source \\\"['<Super>space']\\\" && gsettings set ")
+                f.write("org.gnome.desktop.wm.keybindings switch-input-source-backward ")
+                f.write("\\\"['<Shift><Super>space']\\\"\"\n")
+                f.write("Hidden=false\nNoDisplay=true\nX-GNOME-Autostart-enabled=true\n")
+
+            log.info("Super+Space switching configured")
+
+            def _done():
+                btn.set_sensitive(True)
+                self.show_toast("Super+Space switching configured")
+                self.refresh_switching()
+                return False
+            GLib.idle_add(_done)
+
+        threading.Thread(target=do_configure, daemon=True).start()
 
     def refresh_switching(self):
         shortcut = get_switch_shortcut()
@@ -322,7 +385,6 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         )
         parent.append(group)
 
-        # Preview window
         self.preview_row = Adw.SwitchRow(
             title="Preview Window",
             subtitle="Show suggestion preview while typing",
@@ -330,21 +392,18 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         self.preview_row.connect("notify::active", self._on_preview_changed)
         group.add(self.preview_row)
 
-        # Enter closes preview
         self.newline_row = Adw.SwitchRow(
             title="Enter Closes Preview Only",
             subtitle="Enter commits text without inserting a new line",
         )
         group.add(self.newline_row)
 
-        # Dictionary suggestions
         self.dict_row = Adw.SwitchRow(
             title="Dictionary Suggestions",
             subtitle="Show Bangla word suggestions from dictionary",
         )
         group.add(self.dict_row)
 
-        # Max suggestions
         self.sug_adj = Gtk.Adjustment(value=15, lower=5, upper=15, step_increment=1)
         self.sug_row = Adw.SpinRow(
             title="Max Suggestions",
@@ -353,7 +412,6 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         )
         group.add(self.sug_row)
 
-        # Orientation
         self.orient_row = Adw.ActionRow(
             title="Suggestion List Orientation",
             subtitle="Direction of the candidate list",
@@ -365,7 +423,6 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         self.orient_row.add_suffix(self.orient_dropdown)
         group.add(self.orient_row)
 
-        # Apply button
         apply_row = Adw.ActionRow(title="")
         self.typing_apply_btn = Gtk.Button(
             label="Apply Typing Settings",
@@ -383,12 +440,23 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         self.orient_row.set_sensitive(active)
 
     def on_apply_typing(self, btn):
-        set_avro_setting("switch-preview", self.preview_row.get_active())
-        set_avro_setting("switch-newline", self.newline_row.get_active())
-        set_avro_setting("switch-dict", self.dict_row.get_active())
-        set_avro_setting("lutable-size", int(self.sug_adj.get_value()))
-        set_avro_setting("cboxorient", self.orient_dropdown.get_selected())
-        self.show_toast("Typing settings applied")
+        log.info("User: Apply typing settings")
+        btn.set_sensitive(False)
+
+        def do_apply():
+            set_avro_setting("switch-preview", self.preview_row.get_active())
+            set_avro_setting("switch-newline", self.newline_row.get_active())
+            set_avro_setting("switch-dict", self.dict_row.get_active())
+            set_avro_setting("lutable-size", int(self.sug_adj.get_value()))
+            set_avro_setting("cboxorient", self.orient_dropdown.get_selected())
+
+            def _done():
+                btn.set_sensitive(True)
+                self.show_toast("Typing settings applied")
+                return False
+            GLib.idle_add(_done)
+
+        threading.Thread(target=do_apply, daemon=True).start()
 
     # ========================================================================
     # Fixes Status Section
@@ -397,7 +465,7 @@ class AvroManagerWindow(Adw.ApplicationWindow):
     def build_fixes_section(self, parent):
         group = Adw.PreferencesGroup(
             title="Fix Status",
-            description="Status of all applied bug fixes",
+            description="Status of all applied bug fixes for Wayland / GNOME 50+",
         )
         parent.append(group)
 
@@ -421,7 +489,6 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         self.fix_apt.add_prefix(Gtk.Image.new_from_icon_name("security-high-symbolic"))
         group.add(self.fix_apt)
 
-        # Apply all fixes button
         fix_row = Adw.ActionRow(title="")
         self.apply_all_btn = Gtk.Button(
             label="Apply All Fixes", css_classes=["suggested-action"],
@@ -432,6 +499,7 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         group.add(fix_row)
 
     def on_apply_all_fixes(self, btn):
+        log.info("User: Apply all fixes")
         btn.set_sensitive(False)
         btn.set_label("Applying...")
         self.show_toast("Applying all fixes...")
@@ -439,15 +507,20 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         def do_apply():
             script = os.path.join(SCRIPT_DIR, "install.sh")
             rc, out, err = run_cmd(["bash", script], timeout=120)
-            GLib.idle_add(self._apply_done, rc == 0)
-            return False
+            log.info(f"Apply all fixes result: rc={rc}")
+            GLib.idle_add(self._apply_done, rc == 0, err)
 
         threading.Thread(target=do_apply, daemon=True).start()
 
-    def _apply_done(self, success):
+    def _apply_done(self, success, err):
         self.apply_all_btn.set_sensitive(True)
         self.apply_all_btn.set_label("Apply All Fixes")
-        self.show_toast("All fixes applied!" if success else "Some fixes failed — check terminal")
+        if success:
+            self.show_toast("All fixes applied!")
+            log.info("All fixes applied successfully")
+        else:
+            self.show_toast(f"Some fixes failed: {err[:60]}")
+            log.error(f"Apply fixes failed: {err[:200]}")
         self.refresh_all()
         return False
 
@@ -459,15 +532,26 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         group = Adw.PreferencesGroup(title="Maintenance")
         parent.append(group)
 
+        # Update checker
+        self.update_row = Adw.ActionRow(
+            title=f"Version: v{APP_VERSION}",
+            subtitle="Click to check for updates",
+        )
+        self.update_row.add_prefix(Gtk.Image.new_from_icon_name("software-update-available-symbolic"))
+        self.check_update_btn = Gtk.Button(label="Check for Updates", valign=Gtk.Align.CENTER)
+        self.check_update_btn.connect("clicked", self.on_check_update)
+        self.update_row.add_suffix(self.check_update_btn)
+        group.add(self.update_row)
+
         # Restart iBus
         restart_row = Adw.ActionRow(
             title="Restart IBus",
             subtitle="Restart the input method framework",
         )
         restart_row.add_prefix(Gtk.Image.new_from_icon_name("view-refresh-symbolic"))
-        restart_btn = Gtk.Button(label="Restart", valign=Gtk.Align.CENTER)
-        restart_btn.connect("clicked", self.on_restart_ibus)
-        restart_row.add_suffix(restart_btn)
+        self._restart_btn = Gtk.Button(label="Restart", valign=Gtk.Align.CENTER)
+        self._restart_btn.connect("clicked", self.on_restart_ibus)
+        restart_row.add_suffix(self._restart_btn)
         group.add(restart_row)
 
         # Open Preferences
@@ -506,30 +590,187 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         uninstall_row.add_suffix(uninstall_btn)
         group.add(uninstall_row)
 
+        # Uninstall progress (hidden until needed)
+        self.uninstall_progress = Gtk.ProgressBar(show_text=True, margin_top=8, margin_bottom=4,
+            margin_start=12, margin_end=12)
+        self.uninstall_progress.set_fraction(0)
+        self.uninstall_progress.set_text("")
+        self.uninstall_progress.set_visible(False)
+        parent.append(self.uninstall_progress)
+
+        # Diagnostics
+        diag_group = Adw.PreferencesGroup(title="Diagnostics",
+                                           description=f"Log: {LOG_FILE}")
+        parent.append(diag_group)
+
+        log_row = Adw.ActionRow(
+            title="Activity Log",
+            subtitle="View all events for troubleshooting",
+        )
+        log_row.add_prefix(Gtk.Image.new_from_icon_name("document-open-symbolic"))
+        log_btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4,
+                              valign=Gtk.Align.CENTER)
+        view_log_btn = Gtk.Button(label="View Log")
+        view_log_btn.connect("clicked", self.on_view_log)
+        log_btn_box.append(view_log_btn)
+        clear_log_btn = Gtk.Button(label="Clear Log", css_classes=["destructive-action"])
+        clear_log_btn.connect("clicked", self.on_clear_log)
+        log_btn_box.append(clear_log_btn)
+        log_row.add_suffix(log_btn_box)
+        diag_group.add(log_row)
+
+    # ========================================================================
+    # Update from Git
+    # ========================================================================
+
+    def on_check_update(self, btn):
+        log.info("User: Check for updates")
+        btn.set_sensitive(False)
+        btn.set_label("Checking...")
+        self.update_row.set_subtitle("Checking for updates...")
+
+        def do_check():
+            if not os.path.isdir(os.path.join(SCRIPT_DIR, ".git")):
+                GLib.idle_add(self._update_check_done, None, "Not a git clone — updates not available")
+                return
+
+            rc, _, err = run_cmd(["git", "-C", SCRIPT_DIR, "fetch", "origin"], timeout=30)
+            if rc != 0:
+                GLib.idle_add(self._update_check_done, None, f"Fetch failed: {err[:60]}")
+                return
+
+            rc, remote_version, _ = run_cmd(
+                ["git", "-C", SCRIPT_DIR, "show", "origin/main:VERSION"], timeout=5
+            )
+            remote_version = remote_version.strip() if rc == 0 else None
+
+            rc, changelog, _ = run_cmd(
+                ["git", "-C", SCRIPT_DIR, "log", "HEAD..origin/main",
+                 "--oneline", "--no-decorate"], timeout=5
+            )
+
+            GLib.idle_add(self._update_check_done, remote_version, changelog)
+
+        threading.Thread(target=do_check, daemon=True).start()
+
+    def _update_check_done(self, remote_version, changelog):
+        self.check_update_btn.set_sensitive(True)
+        self.check_update_btn.set_label("Check for Updates")
+
+        if remote_version is None:
+            self.update_row.set_subtitle(f"v{APP_VERSION} — could not check remote")
+            self.show_toast(f"Update check failed: {changelog}")
+            return False
+
+        if not changelog or remote_version == APP_VERSION:
+            self.update_row.set_subtitle(f"v{APP_VERSION} — up to date!")
+            log.info(f"No updates (local={APP_VERSION}, remote={remote_version})")
+            self.show_toast("You're on the latest version!")
+            return False
+
+        log.info(f"Update available: v{APP_VERSION} → v{remote_version}")
+        self.update_row.set_subtitle(f"v{APP_VERSION} → v{remote_version} available")
+
+        dialog = Adw.AlertDialog(
+            heading=f"Update available: v{remote_version}",
+            body=f"You have v{APP_VERSION}. Changes:\n\n{changelog}\n\n"
+                 "The GUI will restart after updating.",
+        )
+        dialog.add_response("cancel", "Later")
+        dialog.add_response("update", "Update Now")
+        dialog.set_response_appearance("update", Adw.ResponseAppearance.SUGGESTED)
+        dialog.connect("response", self._on_update_confirmed, remote_version)
+        dialog.present(self)
+        return False
+
+    def _on_update_confirmed(self, dialog, response, remote_version):
+        log.info(f"Update dialog response: {response}")
+        if response != "update":
+            return
+
+        self.check_update_btn.set_sensitive(False)
+        self.update_row.set_subtitle("Updating...")
+
+        def do_update():
+            rc, out, err = run_cmd(["git", "-C", SCRIPT_DIR, "pull", "origin", "main"], timeout=60)
+            if rc != 0:
+                log.error(f"git pull failed: {err}")
+                GLib.idle_add(self._update_failed, err)
+                return
+
+            log.info("Update pulled successfully")
+
+            def _restart():
+                self.update_row.set_subtitle(f"Updated to v{remote_version} — restarting...")
+                self.show_toast("Updated! Restarting GUI...")
+                GLib.timeout_add(1500, self._restart_gui)
+                return False
+            GLib.idle_add(_restart)
+
+        threading.Thread(target=do_update, daemon=True).start()
+
+    def _update_failed(self, err):
+        self.check_update_btn.set_sensitive(True)
+        self.check_update_btn.set_label("Check for Updates")
+        self.update_row.set_subtitle(f"v{APP_VERSION} — update failed")
+        self.show_toast(f"Update failed: {err[:60]}")
+        return False
+
+    def _restart_gui(self):
+        log.info("=== GUI restarting after update ===")
+        subprocess.Popen([sys.executable, os.path.join(SCRIPT_DIR, "avro-manager.py")])
+        self.close()
+        return False
+
+    # ========================================================================
+    # Restart IBus / Preferences / Settings
+    # ========================================================================
+
     def on_restart_ibus(self, btn):
-        run_cmd(["ibus", "restart"])
-        self.show_toast("IBus restarted")
-        GLib.timeout_add(2000, lambda: (self.refresh_all(), False)[-1])
+        log.info("User: Restart IBus")
+        btn.set_sensitive(False)
+
+        def do_restart():
+            run_cmd(["ibus", "restart"])
+            time.sleep(2)
+            def _done():
+                btn.set_sensitive(True)
+                self.show_toast("IBus restarted")
+                self.refresh_all()
+                return False
+            GLib.idle_add(_done)
+
+        threading.Thread(target=do_restart, daemon=True).start()
 
     def on_open_prefs(self, btn):
-        pkgdir = INSTALL_DIR
-        pref_js = os.path.join(pkgdir, "pref.js")
+        log.info("User: Open Avro preferences")
+        pref_js = os.path.join(INSTALL_DIR, "pref.js")
         if os.path.exists(pref_js):
             subprocess.Popen([
                 "/usr/bin/env", "gjs",
-                f"--include-path={pkgdir}", pref_js, "--standalone"
+                f"--include-path={INSTALL_DIR}", pref_js, "--standalone"
             ])
             self.show_toast("Preferences window opened")
         else:
             self.show_toast("pref.js not found — run Apply All Fixes first")
 
     def on_open_keyboard_settings(self, btn):
+        log.info("User: Open GNOME Keyboard Settings")
         subprocess.Popen(["gnome-control-center", "keyboard"])
 
+    # ========================================================================
+    # Uninstall (Restore Upstream)
+    # ========================================================================
+
     def on_uninstall(self, btn):
+        log.info("User: clicked Restore Upstream")
         dialog = Adw.AlertDialog(
             heading="Restore upstream ibus-avro?",
-            body="This removes all fixes (Shift fix, GTK4 prefs, Wayland switching, APT hook). "
+            body="This removes all fixes:\n\n"
+                 "- Left/Right Shift fix\n"
+                 "- GTK4 preferences\n"
+                 "- Wayland Super+Space switching\n"
+                 "- APT hook (persistence)\n\n"
                  "The Left Shift bug will come back.",
         )
         dialog.add_response("cancel", "Cancel")
@@ -539,14 +780,77 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         dialog.present(self)
 
     def _on_uninstall_confirmed(self, dialog, response):
+        log.info(f"Uninstall dialog response: {response}")
         if response != "restore":
             return
 
+        log.info("=== UNINSTALL STARTING ===")
+        self.uninstall_progress.set_visible(True)
+        self.uninstall_progress.set_fraction(0)
+        self.uninstall_progress.set_text("Starting...")
+
         def do_uninstall():
-            script = os.path.join(SCRIPT_DIR, "uninstall.sh")
-            rc, _, err = run_cmd(["bash", script], timeout=120)
+            def _update(fraction, text):
+                self.uninstall_progress.set_fraction(fraction)
+                self.uninstall_progress.set_text(text)
+                return False
+
+            # Step 1-2: Remove APT hook + restore upstream (combined in pkexec)
+            GLib.idle_add(_update, 0.1, "Step 1/4 — Removing APT hook...")
+            log.info("Uninstall step 1: creating temp script for pkexec")
+
+            fd, tmp_script = tempfile.mkstemp(prefix="avro-uninstall-", suffix=".sh")
+            try:
+                with os.fdopen(fd, "w") as f:
+                    f.write("#!/bin/bash\n")
+                    f.write("rm -f /etc/apt/apt.conf.d/99-fix-ibus-avro\n")
+                    f.write("rm -f /usr/local/bin/fix-ibus-avro.sh\n")
+                    f.write("apt install --reinstall -y ibus-avro 2>/dev/null || true\n")
+                os.chmod(tmp_script, 0o700)
+
+                GLib.idle_add(_update, 0.3, "Step 2/4 — Restoring upstream (enter password)...")
+                log.info("Uninstall step 2: running pkexec (password prompt expected)")
+                rc, out, err = run_cmd(["pkexec", tmp_script], timeout=120)
+            finally:
+                try:
+                    os.remove(tmp_script)
+                except FileNotFoundError:
+                    pass
+
+            log.info(f"Uninstall pkexec result: rc={rc}")
+            if rc != 0:
+                log.warning("Uninstall aborted — pkexec cancelled or failed")
+                def _aborted():
+                    self.uninstall_progress.set_fraction(0)
+                    self.uninstall_progress.set_text("Uninstall cancelled")
+                    self.show_toast("Uninstall cancelled")
+                    return False
+                GLib.idle_add(_aborted)
+                return
+
+            # Step 3: Remove autostart + desktop shortcut
+            GLib.idle_add(_update, 0.7, "Step 3/4 — Removing autostart entry...")
+            log.info("Uninstall step 3: removing autostart + shortcut")
+            for f in [
+                os.path.expanduser("~/.config/autostart/ibus-avro-wayland-fix.desktop"),
+                os.path.expanduser("~/.local/share/applications/avro-manager.desktop"),
+            ]:
+                try:
+                    os.remove(f)
+                except FileNotFoundError:
+                    pass
+
+            # Step 4: Restart ibus
+            GLib.idle_add(_update, 0.9, "Step 4/4 — Restarting IBus...")
+            log.info("Uninstall step 4: restarting ibus")
+            run_cmd(["ibus", "restart"])
+            time.sleep(1)
+
+            log.info("=== UNINSTALL COMPLETE ===")
             def _done():
-                self.show_toast("Upstream restored" if rc == 0 else f"Failed: {err[:60]}")
+                self.uninstall_progress.set_fraction(1.0)
+                self.uninstall_progress.set_text("Upstream restored — fixes removed")
+                self.show_toast("Upstream ibus-avro restored")
                 self.refresh_all()
                 return False
             GLib.idle_add(_done)
@@ -554,10 +858,76 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         threading.Thread(target=do_uninstall, daemon=True).start()
 
     # ========================================================================
+    # Log Viewer
+    # ========================================================================
+
+    def on_view_log(self, btn):
+        log.info("User opened log viewer")
+        try:
+            with open(LOG_FILE) as f:
+                content = f.read()
+        except FileNotFoundError:
+            content = "(No log file yet)"
+
+        dialog = Adw.Dialog()
+        dialog.set_title("Activity Log")
+        dialog.set_content_width(750)
+        dialog.set_content_height(500)
+
+        toolbar_view = Adw.ToolbarView()
+        dialog.set_child(toolbar_view)
+
+        header = Adw.HeaderBar()
+        copy_btn = Gtk.Button(icon_name="edit-copy-symbolic", tooltip_text="Copy log to clipboard")
+        header.pack_end(copy_btn)
+        toolbar_view.add_top_bar(header)
+
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        text_view = Gtk.TextView(editable=False, monospace=True,
+                                  wrap_mode=Gtk.WrapMode.WORD_CHAR,
+                                  top_margin=8, bottom_margin=8,
+                                  left_margin=8, right_margin=8)
+        text_view.get_buffer().set_text(content)
+        scroll.set_child(text_view)
+        toolbar_view.set_content(scroll)
+
+        def _scroll_to_end(*args):
+            adj = scroll.get_vadjustment()
+            adj.set_value(adj.get_upper())
+            return False
+        GLib.idle_add(_scroll_to_end)
+
+        def _copy(*args):
+            clipboard = self.get_clipboard()
+            clipboard.set(content)
+            self.show_toast("Log copied to clipboard")
+        copy_btn.connect("clicked", _copy)
+
+        dialog.present(self)
+
+    def on_clear_log(self, btn):
+        log.info("User cleared log")
+        for handler in log.handlers[:]:
+            if isinstance(handler, logging.handlers.RotatingFileHandler):
+                handler.close()
+                log.removeHandler(handler)
+        with open(LOG_FILE, "w") as f:
+            f.write("")
+        fh = logging.handlers.RotatingFileHandler(LOG_FILE, maxBytes=1_000_000, backupCount=3)
+        fh.setFormatter(logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+        ))
+        log.addHandler(fh)
+        log.info(f"=== Log cleared — Avro Phonetic Manager v{APP_VERSION} ===")
+        self.show_toast("Log cleared")
+
+    # ========================================================================
     # Refresh all
     # ========================================================================
 
     def refresh_all(self):
+        log.debug("Refreshing all status...")
+
         def do_refresh():
             try:
                 data = {
@@ -576,8 +946,7 @@ class AvroManagerWindow(Adw.ApplicationWindow):
                 }
                 GLib.idle_add(self._apply_refresh, data)
             except Exception as e:
-                print(f"Refresh error: {e}")
-            return False
+                log.exception(f"Refresh error: {e}")
 
         threading.Thread(target=do_refresh, daemon=True).start()
 
@@ -585,7 +954,7 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         try:
             return self._do_apply_refresh(d)
         except Exception as e:
-            print(f"UI refresh error: {e}")
+            log.exception(f"UI refresh error: {e}")
         return False
 
     def _do_apply_refresh(self, d):
@@ -613,12 +982,12 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         self._on_preview_changed(self.preview_row, None)
 
         # Fixes
-        ok = lambda v: "Applied" if v else "Not applied"
-        self.fix_shift.set_subtitle(ok(d["shift_fix"]))
-        self.fix_debug.set_subtitle(ok(d["debug_off"]))
-        self.fix_gtk4.set_subtitle(ok(d["gtk4_prefs"]))
-        self.fix_wayland.set_subtitle(ok(d["wayland"]))
-        self.fix_apt.set_subtitle(ok(d["apt_hook"]))
+        ok_text = lambda v: "Applied" if v else "Not applied"
+        self.fix_shift.set_subtitle(ok_text(d["shift_fix"]))
+        self.fix_debug.set_subtitle(ok_text(d["debug_off"]))
+        self.fix_gtk4.set_subtitle(ok_text(d["gtk4_prefs"]))
+        self.fix_wayland.set_subtitle(ok_text(d["wayland"]))
+        self.fix_apt.set_subtitle(ok_text(d["apt_hook"]))
 
         return False
 
@@ -626,6 +995,7 @@ class AvroManagerWindow(Adw.ApplicationWindow):
 # ============================================================================
 # Entry point
 # ============================================================================
+
 
 def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)

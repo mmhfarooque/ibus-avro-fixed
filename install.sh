@@ -22,14 +22,20 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 INSTALL_DIR="/usr/share/ibus-avro"
 
+# Logging — same log file as the GUI
+LOG_DIR="$HOME/.local/share/avro-manager"
+LOG_FILE="$LOG_DIR/avro.log"
+mkdir -p "$LOG_DIR"
+logmsg() { echo "$(date '+%Y-%m-%d %H:%M:%S') [INSTALL] $1" >> "$LOG_FILE"; }
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-ok()   { echo -e "  ${GREEN}[OK]${NC} $1"; }
-warn() { echo -e "  ${YELLOW}[WARN]${NC} $1"; }
-fail() { echo -e "  ${RED}[FAIL]${NC} $1"; }
+ok()   { echo -e "  ${GREEN}[OK]${NC} $1"; logmsg "OK: $1"; }
+warn() { echo -e "  ${YELLOW}[WARN]${NC} $1"; logmsg "WARN: $1"; }
+fail() { echo -e "  ${RED}[FAIL]${NC} $1"; logmsg "FAIL: $1"; }
 
 echo ""
 echo "============================================"
@@ -37,6 +43,8 @@ echo "  Avro Phonetic for Linux — Fixed Edition"
 echo "  Bangla typing with all known bugs fixed"
 echo "============================================"
 echo ""
+logmsg "=== INSTALL STARTING === (v$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || echo 'unknown'))"
+logmsg "User: $(whoami) | Session: ${XDG_SESSION_TYPE:-unknown}"
 
 if [ "$(id -u)" -eq 0 ]; then
     fail "Do not run as root. The script will use sudo when needed."
@@ -220,4 +228,5 @@ echo ""
 if [ "$FRESH_INSTALL" = true ]; then
     echo "  NOTE: Log out and log back in for iBus to fully load."
 fi
+logmsg "=== INSTALL COMPLETE ==="
 echo ""

@@ -5,9 +5,16 @@
 
 set -e
 
+# Logging — same log file as the GUI
+LOG_DIR="$HOME/.local/share/avro-manager"
+LOG_FILE="$LOG_DIR/avro.log"
+mkdir -p "$LOG_DIR"
+logmsg() { echo "$(date '+%Y-%m-%d %H:%M:%S') [UNINSTALL] $1" >> "$LOG_FILE"; }
+
 echo ""
 echo "=== Removing ibus-avro fixes ==="
 echo ""
+logmsg "=== CLI UNINSTALL STARTING ==="
 
 # Remove APT hook
 echo "[1/4] Removing APT hook..."
@@ -33,3 +40,4 @@ echo ""
 echo "=== Uninstall complete ==="
 echo "Upstream ibus-avro restored. The Left Shift bug is back."
 echo "To reinstall fixes: ./install.sh"
+logmsg "=== CLI UNINSTALL COMPLETE ==="

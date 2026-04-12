@@ -7,6 +7,22 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.2.0] - 2026-04-12
+
+### Added
+- **Comprehensive activity logging** — every user action, system command, and result logged to `~/.local/share/avro-manager/avro.log`. Includes GUI events, fix application, pkexec auth, install/uninstall steps, and errors. Auto-rotates at 1MB (3 backups).
+- **In-GUI log viewer** — "View Log" button in Diagnostics section opens a scrollable text view with "Copy to clipboard" for easy bug reporting. "Clear Log" for fresh debugging sessions.
+- **Self-update from Git** — "Check for Updates" button in Maintenance section. Fetches latest from GitHub, shows what changed, one-click "Update Now" pulls and auto-restarts GUI. No uninstall/reinstall needed.
+- **Proper uninstall with progress bar** — step-by-step progress: removing APT hook → restoring upstream → removing autostart → restarting IBus. Handles pkexec cancellation gracefully.
+- **Single instance** — `GApplication` prevents duplicate windows when clicking the app icon while already open.
+- **Install/uninstall script logging** — `install.sh` and `uninstall.sh` write to the same log file.
+
+### Improved
+- **Non-blocking UI** — all operations (configure switching, apply typing settings, restart IBus, uninstall) now run in background threads. UI never freezes.
+- **Security** — temp uninstall scripts use `tempfile.mkstemp()` with `0o700` permissions instead of predictable `/tmp/` paths.
+
+---
+
 ## [2.1.0] - 2026-04-12
 
 ### Added
