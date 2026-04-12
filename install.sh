@@ -54,7 +54,7 @@ fi
 # ============================================================================
 # Step 1: Install ibus-avro base package if not present
 # ============================================================================
-echo "[1/6] Checking ibus-avro..."
+echo "[1/7] Checking ibus-avro..."
 
 if dpkg -l ibus-avro &>/dev/null 2>&1; then
     ok "ibus-avro already installed — will apply fixes on top"
@@ -74,7 +74,7 @@ echo ""
 # ============================================================================
 # Step 2: Apply Left Shift + Right Shift fix
 # ============================================================================
-echo "[2/6] Fixing Left Shift / Right Shift bug..."
+echo "[2/7] Fixing Left Shift / Right Shift bug..."
 
 MAIN_GJS="$INSTALL_DIR/main-gjs.js"
 if [ -f "$MAIN_GJS" ]; then
@@ -127,7 +127,7 @@ echo ""
 # ============================================================================
 # Step 3: Install GTK4 preferences window
 # ============================================================================
-echo "[3/6] Installing GTK4 preferences window..."
+echo "[3/7] Installing GTK4 preferences window..."
 
 if [ -f "$SCRIPT_DIR/pref.js" ]; then
     sudo cp "$SCRIPT_DIR/pref.js" "$INSTALL_DIR/pref.js"
@@ -140,7 +140,7 @@ echo ""
 # ============================================================================
 # Step 4: Create APT hook (re-applies fixes after system updates)
 # ============================================================================
-echo "[4/6] Installing APT hook for persistence..."
+echo "[4/7] Installing APT hook for persistence..."
 
 sudo tee /usr/local/bin/fix-ibus-avro.sh > /dev/null << 'PATCHSCRIPT'
 #!/bin/bash
@@ -178,7 +178,7 @@ echo ""
 # ============================================================================
 # Step 5: Configure Wayland input switching
 # ============================================================================
-echo "[5/6] Configuring input switching..."
+echo "[5/7] Configuring input switching..."
 
 bash "$SCRIPT_DIR/setup-wayland.sh"
 echo ""
@@ -186,7 +186,7 @@ echo ""
 # ============================================================================
 # Step 6: Restart iBus
 # ============================================================================
-echo "[6/6] Restarting iBus..."
+echo "[6/7] Restarting iBus..."
 ibus restart 2>/dev/null || true
 sleep 1
 
@@ -221,12 +221,41 @@ echo "    - Modern GTK4 preferences window"
 echo "    - Super+Space switching works on Wayland"
 echo "    - Fixes persist across system updates"
 echo ""
-echo "  GUI Manager (optional):"
-echo "    ./setup-gui.sh"
-echo "    Then search 'Avro' in your app launcher."
+# ---- Step 7: Install GUI Manager ----
+echo "[7/7] Installing GUI Manager..."
+
+# Install Python GTK4 deps (may already be installed from step 1)
+sudo apt install -y python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 2>&1 | tail -2
+
+chmod +x "$SCRIPT_DIR/avro-manager.py" 2>/dev/null || true
+
+DESKTOP_FILE="$HOME/.local/share/applications/avro-manager.desktop"
+mkdir -p "$HOME/.local/share/applications"
+echo "[Desktop Entry]
+Type=Application
+Name=Avro Phonetic Manager
+Comment=Configure Avro Phonetic Bangla input method
+Exec=python3 $SCRIPT_DIR/avro-manager.py
+Icon=input-keyboard-symbolic
+Terminal=false
+Categories=Settings;System;
+Keywords=avro;bangla;bengali;ibus;phonetic;keyboard;input;" > "$DESKTOP_FILE"
+
+ok "GUI Manager installed — search 'Avro' in app launcher"
 echo ""
+
 if [ "$FRESH_INSTALL" = true ]; then
     echo "  NOTE: Log out and log back in for iBus to fully load."
 fi
 logmsg "=== INSTALL COMPLETE ==="
+
+# Auto-launch the GUI Manager
+if [ -f "$SCRIPT_DIR/avro-manager.py" ]; then
+    nohup python3 "$SCRIPT_DIR/avro-manager.py" >/dev/null 2>&1 &
+    disown
+fi
+
+echo ""
+echo "  Avro Phonetic Manager is now running."
+echo "  Search 'Avro' in your app launcher to open it anytime."
 echo ""
