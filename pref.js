@@ -5,87 +5,184 @@
     License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-    Software distributed under the License is distributed on an "AS IS"
-    basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See the
-    License for the specific language governing rights and limitations
-    under the License.
-
     The Original Code is ibus-avro
+    The Initial Developer is Sarim Khan <sarim2005@gmail.com>
+    Copyright (C) Sarim Khan. All Rights Reserved.
 
-    The Initial Developer of the Original Code is
-    Sarim Khan <sarim2005@gmail.com>
-
-    Copyright (C) Sarim Khan (http://www.sarimkhan.com). All Rights Reserved.
-
-
-    Contributor(s): ______________________________________.
+    Contributors:
+        Mehdi Hasan Khan <mhasan@omicronlab.com>
+        Mahmud Farooque <farooque7@gmail.com> (GTK4/libadwaita port)
 
     *****************************************************************************
     =============================================================================
 */
 
-imports.gi.versions.Gtk = '3.0';
+imports.gi.versions.Gtk = '4.0';
+imports.gi.versions.Adw = '1';
 imports.searchPath.unshift('.');
 const Gio = imports.gi.Gio;
 const Gtk = imports.gi.Gtk;
-const GLib = imports.gi.GLib;
+const Adw = imports.gi.Adw;
 const eevars = imports.evars;
 
-var prefwindow, switch_preview, switch_newline, switch_dict, lutable_size, cboxorient, scale1;
+var prefwindow, switch_preview, switch_newline, switch_dict;
 
 function runpref() {
 
-    Gtk.init(null, 0);
-    let builder = new Gtk.Builder();
-    builder.add_from_file(eevars.get_pkgdatadir() + "/avropref.ui");
+    let app = new Adw.Application({
+        application_id: 'com.omicronlab.avro.preferences',
+        flags: Gio.ApplicationFlags.FLAGS_NONE,
+    });
 
-    prefwindow = builder.get_object("window1");
-    switch_preview = builder.get_object("switch_preview");
-    switch_newline = builder.get_object("switch_newline");
-    switch_dict = builder.get_object("switch_dict");
-    lutable_size = builder.get_object("lutable_size"); 
-    scale1 = builder.get_object("scale1"); 
-    cboxorient = builder.get_object("cboxorient");
-    
-    switch_preview.connect("notify::active", validate);
-    switch_newline.connect("notify::active", validate);
-    switch_dict.connect("notify::active", validate);
+    app.connect('activate', function() {
+        let setting = Gio.Settings.new("com.omicronlab.avro");
 
+        // Main window
+        prefwindow = new Adw.ApplicationWindow({
+            application: app,
+            title: 'Avro Phonetic Preferences',
+            default_width: 500,
+            default_height: 450,
+            resizable: false,
+        });
 
-    let setting = Gio.Settings.new("com.omicronlab.avro")
-    setting.bind("switch-preview", switch_preview, "active", Gio.SettingsBindFlags.DEFAULT)
-    setting.bind("switch-dict", switch_dict, "active", Gio.SettingsBindFlags.DEFAULT)
-    setting.bind("switch-newline", switch_newline, "active", Gio.SettingsBindFlags.DEFAULT)
-    setting.bind("lutable-size", lutable_size, "value", Gio.SettingsBindFlags.DEFAULT)
-    setting.bind("cboxorient", cboxorient, "active", Gio.SettingsBindFlags.DEFAULT)
+        // Toolbar view with header
+        let toolbarView = new Adw.ToolbarView();
+        prefwindow.set_content(toolbarView);
 
-    validate();
+        let header = new Adw.HeaderBar();
+        toolbarView.add_top_bar(header);
 
-    prefwindow.connect ("destroy", function(){Gtk.main_quit()});
-    prefwindow.show_all();
+        // Scrollable content
+        let scroll = new Gtk.ScrolledWindow({ vexpand: true });
+        toolbarView.set_content(scroll);
 
-    Gtk.main();
-}
+        let mainBox = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 0,
+            margin_start: 16,
+            margin_end: 16,
+            margin_top: 8,
+            margin_bottom: 16,
+        });
+        scroll.set_child(mainBox);
 
-function validate(){
-    if (!switch_preview.get_active()){
-        switch_newline.set_active(false);
-        switch_dict.set_active(false);
+        // ---- Typing Behaviour ----
+        let typingGroup = new Adw.PreferencesGroup({
+            title: 'Typing Behaviour',
+            description: 'How Avro handles your input',
+        });
+        mainBox.append(typingGroup);
 
-        switch_dict.sensitive = false;
-        switch_newline.sensitive = false;
-        scale1.sensitive = false;
-        cboxorient.sensitive = false;
-    } else {
-        switch_dict.sensitive = true;
-        switch_newline.sensitive = true;
-        scale1.sensitive = true;
-        cboxorient.sensitive = true;
-    }
+        // Preview Window toggle
+        let previewRow = new Adw.SwitchRow({
+            title: 'Preview Window',
+            subtitle: 'Show suggestion preview while typing',
+        });
+        setting.bind("switch-preview", previewRow, "active", Gio.SettingsBindFlags.DEFAULT);
+        typingGroup.add(previewRow);
+        switch_preview = previewRow;
+
+        // Enter closes preview
+        let newlineRow = new Adw.SwitchRow({
+            title: 'Enter Closes Preview Only',
+            subtitle: 'Enter/Return commits text without inserting a new line',
+        });
+        setting.bind("switch-newline", newlineRow, "active", Gio.SettingsBindFlags.DEFAULT);
+        typingGroup.add(newlineRow);
+        switch_newline = newlineRow;
+
+        // ---- Dictionary ----
+        let dictGroup = new Adw.PreferencesGroup({
+            title: 'Dictionary',
+            description: 'Bangla dictionary suggestion settings',
+        });
+        mainBox.append(dictGroup);
+
+        // Dictionary toggle
+        let dictRow = new Adw.SwitchRow({
+            title: 'Dictionary Suggestions',
+            subtitle: 'Show Bangla word suggestions from dictionary',
+        });
+        setting.bind("switch-dict", dictRow, "active", Gio.SettingsBindFlags.DEFAULT);
+        dictGroup.add(dictRow);
+        switch_dict = dictRow;
+
+        // Max suggestions
+        let sugAdj = new Gtk.Adjustment({
+            value: setting.get_int('lutable-size'),
+            lower: 5,
+            upper: 15,
+            step_increment: 1,
+        });
+        let sugRow = new Adw.SpinRow({
+            title: 'Max Suggestions',
+            subtitle: 'Maximum number of dictionary suggestions (5–15)',
+            adjustment: sugAdj,
+        });
+        setting.bind("lutable-size", sugAdj, "value", Gio.SettingsBindFlags.DEFAULT);
+        dictGroup.add(sugRow);
+
+        // Orientation
+        let orientGroup = new Adw.PreferencesGroup({
+            title: 'Appearance',
+        });
+        mainBox.append(orientGroup);
+
+        let orientRow = new Adw.ActionRow({
+            title: 'Suggestion List Orientation',
+            subtitle: 'Direction of the candidate list',
+        });
+
+        let orientDropdown = new Gtk.DropDown({
+            model: Gtk.StringList.new(['Horizontal', 'Vertical']),
+            valign: Gtk.Align.CENTER,
+        });
+        orientDropdown.set_selected(setting.get_int('cboxorient'));
+        orientDropdown.connect('notify::selected', function() {
+            setting.set_int('cboxorient', orientDropdown.get_selected());
+        });
+        orientRow.add_suffix(orientDropdown);
+        orientGroup.add(orientRow);
+
+        // ---- About ----
+        let aboutGroup = new Adw.PreferencesGroup({
+            title: 'About',
+        });
+        mainBox.append(aboutGroup);
+
+        let aboutRow = new Adw.ActionRow({
+            title: 'Avro Phonetic for Linux',
+            subtitle: 'Bangla typing with phonetic transliteration\nOriginal: Sarim Khan | Fixes: Mahmud Farooque',
+        });
+        aboutRow.add_prefix(Gtk.Image.new_from_icon_name('input-keyboard-symbolic'));
+        aboutGroup.add(aboutRow);
+
+        // ---- Validation ----
+        function validate() {
+            let previewOn = previewRow.get_active();
+            newlineRow.set_sensitive(previewOn);
+            dictRow.set_sensitive(previewOn);
+            sugRow.set_sensitive(previewOn && dictRow.get_active());
+            orientRow.set_sensitive(previewOn);
+
+            if (!previewOn) {
+                newlineRow.set_active(false);
+                dictRow.set_active(false);
+            }
+        }
+
+        previewRow.connect('notify::active', validate);
+        dictRow.connect('notify::active', validate);
+        validate();
+
+        prefwindow.present();
+    });
+
+    app.run([]);
 }
 
 //check if running standalone
 if(ARGV[0] == '--standalone'){
-    //running standalone, so no one to call me,calling myself
     runpref();
 }

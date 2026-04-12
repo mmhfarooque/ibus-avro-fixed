@@ -9,3 +9,5 @@ configure
 Makefile.in
 install-sh
 missing
+build/
+*.deb

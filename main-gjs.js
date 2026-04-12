@@ -81,8 +81,8 @@ if (bus.is_connected()) {
     
     function engine_process_key_event(engine, keyval, keycode, state) {
 
-        //print keypress infos, helpful for debugging
-        print(keyval + " " + keycode + " " + state);
+        //debug: uncomment to log keypresses
+        //print(keyval + " " + keycode + " " + state);
 
         //sanitize state, main reason is to weed out xorg masks
         state = state & IBus.ModifierType.MODIFIER_MASK;
@@ -92,9 +92,11 @@ if (bus.is_connected()) {
             return false;
         }
 
-        // capture the shift key
-        if (keycode == 42) {
-            return true;
+        // Pass through Left Shift (keycode 42) — original code consumed it,
+        // preventing Left Shift from working system-wide when Avro was active.
+        // Also pass through Right Shift (keycode 54).
+        if (keycode == 42 || keycode == 54) {
+            return false;
         }
 
         // process letter key events

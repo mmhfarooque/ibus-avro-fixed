@@ -1,104 +1,144 @@
-# Avro phonetic for Linux in IBus
-Avro phonetic implementation for Linux in IBus.
+# ibus-avro-fixed — Avro Phonetic Bangla for Linux (Fixed Edition)
 
-## Installation
+Avro Phonetic lets you type Bangla by writing English phonetically — it transliterates as you type. This is a **fixed fork** of [ibus-avro](https://github.com/sarim/ibus-avro) that solves all known bugs on modern Ubuntu/Debian.
 
+## What's Fixed
 
-<a href="https://repology.org/project/ibus-avro/versions">
-    <img src="https://repology.org/badge/vertical-allrepos/ibus-avro.svg" alt="Packaging status" align="right">
-</a>
+| Bug | Upstream | This Fork |
+|-----|----------|-----------|
+| **Left Shift key broken** | Engine consumes keycode 42 — Left Shift stops working system-wide | Fixed: passes through correctly |
+| **Right Shift key** | Not handled | Fixed: passes through correctly |
+| **Preferences window** | GTK3 (outdated, looks wrong on GNOME 42+) | GTK4 + libadwaita (modern GNOME look) |
+| **Wayland input switching** | Relies on X11 key grabs (broken on Wayland) | Configures GNOME Super+Space switching |
+| **System updates break fixes** | No solution | APT hook re-applies fixes automatically |
+| **Debug logging** | Every keypress logged to journal | Disabled |
 
-Ubuntu/Debian/Linux Mint
----
+## Supported Systems
 
-On Ubuntu, and on Debian's *testing* and *unstable* releases, Avro phonetic
-is distributed through the `ibus-avro` package. To install it, simply do:
+- Ubuntu 24.04 LTS, 26.04 LTS
+- Debian 12+
+- Linux Mint 21+
+- Pop!_OS 22.04+
+- Any Debian-based distro with iBus and GNOME
 
-	sudo apt install ibus-avro
+## Quick Install
 
-Arch/Manjaro/EndeavourOS
----
+### Option 1: One-command installer (recommended)
 
-Install [`ibus-avro-git`](https://aur.archlinux.org/packages/ibus-avro-git) from the AUR. Please see [AUR prerequisites](https://wiki.archlinux.org/title/Arch_User_Repository#Prerequisites) if you already have not.
+```bash
+git clone https://github.com/mmhfarooque/ibus-avro-fixed.git
+cd ibus-avro-fixed
+chmod +x install.sh
+./install.sh
+```
 
+This handles everything — installs ibus-avro if missing, applies all fixes, sets up Wayland switching, creates APT hook for persistence.
 
-Other Linux distros (install from source)
----
+### Option 2: .deb package
 
-On other Linux distros you can install the dependencies and build/install
-using the source code in this repository.
+Download from [Releases](https://github.com/mmhfarooque/ibus-avro-fixed/releases), then:
 
-1. Open terminal/package manager and install following packages:
+```bash
+sudo apt install ./ibus-avro-fixed_2.0.0_all.deb
+```
 
-		git
-		libibus-1.0-dev
-		automake
-		autoconf
-		make
-		gjs
-		ibus
+This **replaces** the upstream `ibus-avro` package with the fixed version.
 
-    __For e.g. Debian 10 "buster"__
+### Option 3: Patch existing ibus-avro
 
-    As root, do:
+If you already have `ibus-avro` installed and just want the fixes:
 
-		apt install git libibus-1.0-dev automake autoconf make gjs ibus
+```bash
+git clone https://github.com/mmhfarooque/ibus-avro-fixed.git
+cd ibus-avro-fixed
+./install.sh
+```
 
-    __For other linux distributions__
+The installer detects the existing installation and applies fixes on top.
 
-    You'll need all related build tools like `automake`, `autoconf` etc...
-    and to run it you need `ibus` and `gjs`. Use the list of packages above
-    as guidance, but please note that some packages may have other names.
+## After Installation
 
-2. Now give the following commands step-by-step:
+1. Open **Settings → Keyboard → Input Sources**
+2. Click **+** → search **Bangla** → select **Bangla (Avro Phonetic)**
+3. Press **Super+Space** to switch between English and Bangla
+4. Type in English — Avro converts to Bangla phonetically
 
-		git clone https://github.com/sarim/ibus-avro.git
-		cd ibus-avro
-		aclocal && autoconf && automake --add-missing
-		./configure --prefix=/usr
-		sudo make install
-		
-    __For Fedora (36, Cinnamon DE), Installing from source, and Enabling IBus Avro__
+## How Avro Phonetic Works
 
-		git clone https://github.com/sarim/ibus-avro.git
-		cd ibus-avro
-		sudo dnf install automake # this installs aclocal, autoconf, and automake
-		sudo dnf install ibus-devel ibus-libs  # to repair "missing ibus-1.0 error"
-		aclocal && autoconf && automake --add-missing
-		./configure --prefix=/usr
+Type English letters and Avro converts them to Bangla:
 
-		sudo make install
-	
-	Avro should be installed on your system. If you can't find anything, try logging out / restarting the computer. 
-	Now one needs to add avro in his input method. Since the installation was done on Fedora 36 with Cinnamon DE, it maybe slightly different in other DE (ie, Gnome, KDE, etc).
-	
-	Press `windows key` -> `Input method selector`.
-	Initially, `no input method` was chosen. Select `Use IBus`, and at the right of `Use IBus`, there is `Preference`. Clicking it opens
-	`IBus preference`. Now `Input method` -> `Add` -> `Bangla` -> `Avro`. One may need to logout again to see the changes.
+| You type | You get |
+|----------|---------|
+| `ami` | আমি |
+| `bangla` | বাংলা |
+| `bhalo` | ভালো |
+| `dhaka` | ঢাকা |
+| `tumi kemon acho` | তুমি কেমন আছো |
 
-## Usage
+Full phonetic rules: [Avro Phonetic Layout](https://avro.im/layout)
 
-**Older versions of GNOME, Cinnamon, and present version of other DEs**:
+## Preferences
 
- 1. Run __IBus__ (`Applications -> System Tools -> IBus`) from _Dash_
- 2. Open __IBus__ `Preferences` from the top panel icon  
- 3. Go to `Input method`
- 4. `Select an input method -> Bengali -> Avro`
- 5. Now Click `Add` button to add __Avro__ to the list
- 6. Now restart __IBus__ from the top panel icon (`Right Click -> Restart`)
- 7. Now Press `Ctrl+Space` to toggle between _English_ and _Avro_ (Bengali)
- 8. Enjoy __Avro Phonetic!__
+Right-click the iBus tray icon → **Preferences**, or run:
 
-**Recent GNOME versions**: It requires additional steps to configure ibus-avro in Manjaro GNOME (and possibly other distros using a very recent GNOME version). See [this](https://github.com/sarim/ibus-avro/issues/202#issuecomment-1719779633) comment for more details.
+```bash
+gjs --include-path=/usr/share/ibus-avro /usr/share/ibus-avro/pref.js --standalone
+```
 
-**Recent Cinnamon versions**: See [this comment](https://github.com/sarim/ibus-avro/issues/226#issuecomment-3762641612).
+Settings:
+- **Preview Window** — show/hide suggestion preview while typing
+- **Dictionary Suggestions** — enable Bangla word suggestions
+- **Max Suggestions** — number of candidates (5–15)
+- **Enter Closes Preview** — Enter commits without newline
+- **Orientation** — horizontal or vertical suggestion list
 
-## Contributors
- 
-__IBus Engine__ by __Sarim Khan__ <sarim2005@gmail.com>
+## File Structure
 
-[__Avro JavaScript Phonetic Library__](https://github.com/torifat/jsAvroPhonetic) by [__Rifat Nabi__](https://github.com/torifat)
+```
+.
+├── install.sh              # One-command installer
+├── uninstall.sh            # Restore upstream ibus-avro
+├── setup-wayland.sh        # Wayland input switching setup
+├── main-gjs.js             # IBus engine (with Shift fix)
+├── pref.js                 # Preferences GUI (GTK4/libadwaita)
+├── avrolib.js              # Phonetic transliteration library
+├── avroregexlib.js         # Regex-based transliteration rules
+├── autocorrect.js          # Autocorrect dictionary
+├── avrodict.js             # Bangla dictionary (7MB)
+├── suggestionbuilder.js    # Suggestion engine
+├── dbsearch.js             # Dictionary search
+├── levenshtein.js          # Edit distance for fuzzy matching
+├── suffixdict.js           # Suffix dictionary
+├── utf8.js                 # UTF-8 utilities
+├── packaging/
+│   └── build-deb.sh        # Build .deb package
+├── VERSION
+├── CHANGELOG.md
+├── LICENSE                  # MPL 2.0
+└── README.md
+```
 
-__Avro Phonetic Dictionary Search Library__ by [__Mehdi Hasan Khan__](https://github.com/omicronlab)
+## Uninstall
 
-_Licensed under Mozilla Public License 2.0 ("MPL"), an open source/free software license._
+To restore upstream ibus-avro:
+
+```bash
+./uninstall.sh
+```
+
+Or if installed via .deb:
+
+```bash
+sudo apt remove ibus-avro-fixed
+sudo apt install ibus-avro
+```
+
+## Credits
+
+- **Original:** [Sarim Khan](https://github.com/sarim/ibus-avro) — ibus-avro engine and phonetic library
+- **Contributors:** Mehdi Hasan Khan (dictionary support)
+- **Fixes & GTK4 port:** [Mahmud Farooque](https://github.com/mmhfarooque)
+
+## License
+
+MPL 2.0 (same as upstream ibus-avro)
