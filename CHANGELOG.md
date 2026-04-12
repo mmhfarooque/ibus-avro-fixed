@@ -7,6 +7,20 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.1.0] - 2026-04-12
+
+### Added
+- **Full GTK4 GUI Manager** (`avro-manager.py`) with:
+  - Status panel: iBus daemon, Avro engine, session type, input sources
+  - Input switching: configure Super+Space with one click, autostart persistence
+  - Typing settings: preview, dictionary, suggestions, orientation — all live
+  - Fix status dashboard: Shift fix, debug logging, GTK4 prefs, Wayland, APT hook
+  - Maintenance: restart iBus, open preferences, keyboard settings, restore upstream
+- `setup-gui.sh` — installs GUI dependencies and creates desktop shortcut
+- GUI mentioned in install.sh completion message
+
+---
+
 ## [2.0.1] - 2026-04-12
 
 ### Fixed

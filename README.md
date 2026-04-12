@@ -77,6 +77,24 @@ Type English letters and Avro converts them to Bangla:
 
 Full phonetic rules: [Avro Phonetic Layout](https://avro.im/layout)
 
+## GUI Manager
+
+A full GTK4 graphical manager is included:
+
+```bash
+./setup-gui.sh              # Install deps + desktop shortcut
+python3 avro-manager.py     # Launch
+```
+
+Or search **"Avro"** in your app launcher after setup.
+
+The GUI lets you:
+- View status: iBus running, Avro registered, session type, input sources
+- Configure Super+Space input switching with one click
+- Adjust typing settings: preview, dictionary, max suggestions, orientation
+- Monitor fix status: Shift fix, debug logging, GTK4 prefs, Wayland, APT hook
+- Apply all fixes, restart iBus, open keyboard settings, restore upstream
+
 ## Preferences
 
 Right-click the iBus tray icon → **Preferences**, or run:
@@ -99,8 +117,10 @@ Settings:
 ├── install.sh              # One-command installer
 ├── uninstall.sh            # Restore upstream ibus-avro
 ├── setup-wayland.sh        # Wayland input switching setup
+├── avro-manager.py         # Full GTK4 GUI manager
+├── setup-gui.sh            # GUI dependency installer + desktop shortcut
 ├── main-gjs.js             # IBus engine (with Shift fix)
-├── pref.js                 # Preferences GUI (GTK4/libadwaita)
+├── pref.js                 # Preferences dialog (GTK4/libadwaita)
 ├── avrolib.js              # Phonetic transliteration library
 ├── avroregexlib.js         # Regex-based transliteration rules
 ├── autocorrect.js          # Autocorrect dictionary

@@ -188,6 +188,10 @@ echo "    - Modern GTK4 preferences window"
 echo "    - Super+Space switching works on Wayland"
 echo "    - Fixes persist across system updates"
 echo ""
+echo "  GUI Manager (optional):"
+echo "    ./setup-gui.sh"
+echo "    Then search 'Avro' in your app launcher."
+echo ""
 if [ "$FRESH_INSTALL" = true ]; then
     echo "  NOTE: Log out and log back in for iBus to fully load."
 fi
