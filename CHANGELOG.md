@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.3.0] - 2026-04-12
+
+### Changed
+- **README completely rewritten** — removed .deb install section, removed multi-step manual install. Now one command: `git clone + bash install.sh`. Clear focus on the core mission: fix upstream ibus-avro for Wayland/GNOME 50+.
+- **Install is truly one command** — git clone, install base + all fixes + GUI + desktop shortcut + auto-launch, all from `bash install.sh`.
+
+---
+
 ## [2.2.1] - 2026-04-12
 
 ### Changed
