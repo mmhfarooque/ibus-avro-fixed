@@ -834,6 +834,7 @@ class AvroManagerWindow(Adw.ApplicationWindow):
             for f in [
                 os.path.expanduser("~/.config/autostart/ibus-avro-wayland-fix.desktop"),
                 os.path.expanduser("~/.local/share/applications/avro-manager.desktop"),
+                os.path.expanduser("~/.config/environment.d/10-ibus-avro.conf"),
             ]:
                 try:
                     os.remove(f)

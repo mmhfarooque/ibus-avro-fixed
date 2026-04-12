@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.4.0] - 2026-04-12
+
+### Fixed
+- **Bangla typing not working after install/reboot** — on GNOME 50+ / Wayland, `GTK_IM_MODULE=ibus` is not set by the system (GNOME handles IBus natively but doesn't export the env var). GTK apps didn't know to use IBus, so typing stayed in English even though Super+Space switched the indicator. Fix: installer now creates `~/.config/environment.d/10-ibus-avro.conf` with all three IBus env vars (`GTK_IM_MODULE`, `QT_IM_MODULE`, `XMODIFIERS`). Uninstaller cleans it up.
+
+---
+
 ## [2.3.0] - 2026-04-12
 
 ### Changed

@@ -22,9 +22,10 @@ sudo rm -f /etc/apt/apt.conf.d/99-fix-ibus-avro
 sudo rm -f /usr/local/bin/fix-ibus-avro.sh
 echo "  Done"
 
-# Remove autostart entry
-echo "[2/4] Removing autostart entry..."
+# Remove autostart entry and environment config
+echo "[2/4] Removing autostart entry and environment config..."
 rm -f "$HOME/.config/autostart/ibus-avro-wayland-fix.desktop"
+rm -f "$HOME/.config/environment.d/10-ibus-avro.conf"
 echo "  Done"
 
 # Reinstall stock ibus-avro to restore original files

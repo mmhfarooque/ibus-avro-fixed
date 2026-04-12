@@ -181,6 +181,16 @@ echo ""
 echo "[5/7] Configuring input switching..."
 
 bash "$SCRIPT_DIR/setup-wayland.sh"
+
+# Set GTK_IM_MODULE for Wayland/GNOME 50+ (GNOME doesn't set this automatically)
+ENV_DIR="$HOME/.config/environment.d"
+mkdir -p "$ENV_DIR"
+cat > "$ENV_DIR/10-ibus-avro.conf" << 'ENVEOF'
+GTK_IM_MODULE=ibus
+QT_IM_MODULE=ibus
+XMODIFIERS=@im=ibus
+ENVEOF
+ok "IBus environment variables set for Wayland"
 echo ""
 
 # ============================================================================
