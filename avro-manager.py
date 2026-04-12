@@ -555,21 +555,24 @@ class AvroManagerWindow(Adw.ApplicationWindow):
 
     def refresh_all(self):
         def do_refresh():
-            data = {
-                "ibus": is_ibus_running(),
-                "avro": is_avro_installed(),
-                "registered": is_avro_registered(),
-                "session": get_session_type(),
-                "sources": get_current_input_sources(),
-                "shortcut": get_switch_shortcut(),
-                "shift_fix": is_shift_fix_applied(),
-                "debug_off": is_debug_disabled(),
-                "gtk4_prefs": is_gtk4_prefs_installed(),
-                "wayland": is_wayland_switching_configured(),
-                "apt_hook": is_apt_hook_installed(),
-                "settings": get_avro_settings(),
-            }
-            GLib.idle_add(self._apply_refresh, data)
+            try:
+                data = {
+                    "ibus": is_ibus_running(),
+                    "avro": is_avro_installed(),
+                    "registered": is_avro_registered(),
+                    "session": get_session_type(),
+                    "sources": get_current_input_sources(),
+                    "shortcut": get_switch_shortcut(),
+                    "shift_fix": is_shift_fix_applied(),
+                    "debug_off": is_debug_disabled(),
+                    "gtk4_prefs": is_gtk4_prefs_installed(),
+                    "wayland": is_wayland_switching_configured(),
+                    "apt_hook": is_apt_hook_installed(),
+                    "settings": get_avro_settings(),
+                }
+                GLib.idle_add(self._apply_refresh, data)
+            except Exception as e:
+                print(f"Refresh error: {e}")
             return False
 
         threading.Thread(target=do_refresh, daemon=True).start()
