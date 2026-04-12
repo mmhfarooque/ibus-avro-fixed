@@ -89,10 +89,12 @@ if [ -f "$MAIN_GJS" ]; then
         fi
     fi
 
-    # Disable debug keypress logging
-    if grep -q '^\s*print(keyval' "$MAIN_GJS"; then
-        sudo sed -i 's|^\(\s*\)print(keyval|\1//print(keyval|' "$MAIN_GJS"
-        ok "Disabled keypress debug logging"
+    # Disable ALL debug print statements (keypress, orientation, candidate clicks)
+    if grep -qE '^\s*print\s*\(' "$MAIN_GJS"; then
+        sudo sed -i 's|^\(\s*\)print\s*(|&|' "$MAIN_GJS"  # no-op to check
+        # Comment out all active print() calls except the IBus bus error message
+        sudo sed -i '/Exiting because IBus/!s|^\(\s*\)print\s*(|\1//print(|' "$MAIN_GJS"
+        ok "Disabled debug logging (all print statements)"
     fi
 else
     fail "$MAIN_GJS not found"
@@ -126,8 +128,8 @@ if [ -f "$FILE" ]; then
     if grep -q 'keycode == 42) { return true' "$FILE"; then
         sed -i 's/if (keycode == 42) { return true; }/if (keycode == 42 || keycode == 54) { return false; }/' "$FILE"
     fi
-    # Disable debug logging
-    sed -i 's|^\(\s*\)print(keyval|\1//print(keyval|' "$FILE"
+    # Disable all debug print statements (except IBus bus error)
+    sed -i '/Exiting because IBus/!s|^\(\s*\)print\s*(|\1//print(|' "$FILE"
 fi
 PATCHSCRIPT
 

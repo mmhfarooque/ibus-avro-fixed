@@ -32,7 +32,9 @@ imports.searchPath.unshift('.');
 const eevars = imports.evars;
 const suggestion = imports.suggestionbuilder;
 const Gio = imports.gi.Gio;
-const prefwindow = imports.pref;
+const GLib = imports.gi.GLib;
+// NOTE: pref.js is NOT imported here to avoid GTK3/GTK4 version conflicts.
+// Preferences are launched as a separate process via runPreferences().
 
 //check if running from ibus
 var exec_by_ibus = (ARGV[0] == '--ibus')
@@ -148,7 +150,7 @@ if (bus.is_connected()) {
             }
             
         } else if (keyval == IBus.Up || keyval == IBus.KP_Up || keyval == IBus.Down || keyval == IBus.KP_Down) {
-            print (engine.lookuptable.get_orientation());
+            //print (engine.lookuptable.get_orientation());
             if (engine.currentSuggestions.length <= 0 || engine.lookuptable.get_orientation() == 0){                    
                 commitCandidate(engine);
             } else {
@@ -195,7 +197,7 @@ if (bus.is_connected()) {
             engine.currentSelection = index;
             preeditCandidate(engine);
             suggestionBuilder.updateCandidateSelection(engine.buffertext, engine.currentSuggestions[engine.currentSelection]);
-            print("candidate clicked: " + index + " " + button + " " + state);
+            //print("candidate clicked: " + index + " " + button + " " + state);
         }
     }
 
@@ -359,8 +361,16 @@ if (bus.is_connected()) {
     }
     
     function runPreferences(){
-        //code for running preferences windows will be here
-        prefwindow.runpref();
+        // Launch preferences as a separate process to avoid GTK3/GTK4 conflicts.
+        // pref.js uses GTK4/libadwaita which cannot coexist with GTK3 in the same process.
+        let pkgdir = eevars.get_pkgdatadir();
+        try {
+            GLib.spawn_command_line_async(
+                '/usr/bin/env gjs --include-path=' + pkgdir + ' ' + pkgdir + '/pref.js --standalone'
+            );
+        } catch (e) {
+            print("Failed to launch preferences: " + e.message);
+        }
     }
     /* =========================================================================== */
     /* =========================================================================== */

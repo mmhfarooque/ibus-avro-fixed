@@ -87,7 +87,7 @@ if [ -f "$FILE" ]; then
     if grep -q 'keycode == 42) { return true' "$FILE"; then
         sed -i 's/if (keycode == 42) { return true; }/if (keycode == 42 || keycode == 54) { return false; }/' "$FILE"
     fi
-    sed -i 's|^\(\s*\)print(keyval|\1//print(keyval|' "$FILE"
+    sed -i '/Exiting because IBus/!s|^\(\s*\)print\s*(|\1//print(|' "$FILE"
 fi
 PATCHSCRIPT
 chmod 755 "$PKG_DIR/usr/local/bin/fix-ibus-avro.sh"
