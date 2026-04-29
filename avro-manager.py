@@ -288,8 +288,18 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         toolbar_view = Adw.ToolbarView()
         self.set_content(toolbar_view)
 
-        # Header bar
+        # Header bar — Apply All Fixes here too (in addition to the
+        # existing button in the Fixes section), so it's always reachable
+        # without scrolling.
         header = Adw.HeaderBar()
+        apply_top_btn = Gtk.Button(
+            label="Apply All Fixes",
+            css_classes=["suggested-action"],
+            tooltip_text="Re-apply Shift fix, debug-disable, GTK4 prefs, APT hook, and re-register Super+Space",
+        )
+        apply_top_btn.connect("clicked", self.on_apply_all_fixes)
+        header.pack_start(apply_top_btn)
+
         refresh_btn = Gtk.Button(icon_name="view-refresh-symbolic", tooltip_text="Refresh")
         refresh_btn.connect("clicked", lambda _: self.refresh_all())
         header.pack_end(refresh_btn)

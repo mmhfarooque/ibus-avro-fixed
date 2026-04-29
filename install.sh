@@ -62,13 +62,18 @@ if dpkg -l ibus-avro &>/dev/null 2>&1; then
 else
     echo "  Installing ibus-avro and dependencies..."
     sudo apt update -qq
-    sudo apt install -y ibus-avro gjs gir1.2-gtk-4.0 gir1.2-adw-1 2>&1 | tail -5
-    ok "ibus-avro installed"
+    # ibus-gtk3 / ibus-gtk4 are NOT pulled by ibus-avro alone, and apt's
+    # default install of `ibus-avro` skips Recommends in some configs. GTK
+    # apps then log "No IM module matching GTK_IM_MODULE=ibus found" and
+    # typing silently doesn't work. Install them explicitly.
+    sudo apt install -y ibus-avro ibus-gtk3 ibus-gtk4 gjs gir1.2-gtk-4.0 gir1.2-adw-1 2>&1 | tail -5
+    ok "ibus-avro + GTK IM modules installed"
     FRESH_INSTALL=true
 fi
 
-# Also ensure GTK4/libadwaita bindings are present for the new prefs
-sudo apt install -y gir1.2-gtk-4.0 gir1.2-adw-1 2>&1 | tail -2
+# Defensive: re-ensure ibus-gtk modules + GTK4/libadwaita bindings even on
+# upgrade re-runs (covers users who came in from a partial v2.5.x install)
+sudo apt install -y ibus-gtk3 ibus-gtk4 gir1.2-gtk-4.0 gir1.2-adw-1 2>&1 | tail -2
 echo ""
 
 # ============================================================================
@@ -231,14 +236,25 @@ echo "[6/7] Restarting iBus..."
 # the new daemon is properly parented and the notification doesn't fire.
 # The unit name has "GNOME" in it for legacy reasons but it's the universal
 # user-session unit shipped by ibus and used by Kubuntu / Pop / Mint too.
-IBUS_UNIT=org.freedesktop.IBus.session.GNOME.service
+# Pick the right IBus systemd unit by DE:
+#   GNOME → org.freedesktop.IBus.session.GNOME.service
+#     (Requires gnome-session-initialized.target — only works on GNOME)
+#   KDE / other → org.freedesktop.IBus.session.generic.service
+#     (Conflicts gnome-session-initialized.target — explicitly for non-GNOME)
+# Picking the wrong unit silently fails (the GNOME unit on KDE returns
+# "Unit gnome-session-initialized.target not found" and the daemon never
+# starts — one of v2.5.5's smoke-test bugs).
+if [ "$CURRENT_DE" = "gnome" ]; then
+    IBUS_UNIT=org.freedesktop.IBus.session.GNOME.service
+else
+    IBUS_UNIT=org.freedesktop.IBus.session.generic.service
+fi
 if systemctl --user list-unit-files "$IBUS_UNIT" --no-pager 2>/dev/null | grep -q "$IBUS_UNIT"; then
     systemctl --user restart "$IBUS_UNIT" 2>/dev/null || true
-    ok "Restarted IBus via $IBUS_UNIT (daemon parented under ibus-ui-gtk3)"
+    ok "Restarted IBus via $IBUS_UNIT"
 else
-    # Fallback for systems without the systemd user unit
     ibus restart 2>/dev/null || true
-    warn "systemd user unit $IBUS_UNIT not found; used 'ibus restart' (may show daemon-parent notification)"
+    warn "systemd user unit $IBUS_UNIT not found; used 'ibus restart' as fallback"
 fi
 sleep 1
 

@@ -71,6 +71,27 @@ EOF
         # Clear the (decorative) IBus trigger in case v2.5.0 / v2.5.1 set it.
         gsettings set org.freedesktop.ibus.general.hotkey trigger "['']" 2>/dev/null || true
 
+        # Register IBus as the Plasma 6 Wayland Virtual Keyboard. Without
+        # this, KWin doesn't route IM events through IBus, and the user
+        # sees a notification asking them to do it manually via
+        # systemsettings → Input & Output → Keyboard → Virtual Keyboard.
+        IBUS_VK_DESKTOP=$(ls /usr/share/applications/org.freedesktop.IBus.Panel.Wayland.*.desktop 2>/dev/null | head -1)
+        if [ -n "$IBUS_VK_DESKTOP" ] && command -v kwriteconfig6 >/dev/null 2>&1; then
+            kwriteconfig6 --file kwinrc --group Wayland --key InputMethod "$IBUS_VK_DESKTOP" >/dev/null 2>&1 || true
+            qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
+            echo "  Plasma Virtual Keyboard: IBus ($(basename "$IBUS_VK_DESKTOP"))"
+        fi
+
+        # Ensure preload-engines includes both English keyboard + Avro.
+        # KDE's input switcher / IBus tray needs at least one engine listed
+        # here to show anything; on a fresh install with no prior config,
+        # the list is empty.
+        CURRENT_PRELOAD=$(gsettings get org.freedesktop.ibus.general preload-engines 2>/dev/null)
+        if ! echo "$CURRENT_PRELOAD" | grep -q "ibus-avro"; then
+            gsettings set org.freedesktop.ibus.general preload-engines "['xkb:us::eng', 'ibus-avro']" 2>/dev/null || true
+            echo "  preload-engines: ['xkb:us::eng', 'ibus-avro']"
+        fi
+
         # 1. Install user-level desktop entry pointing at the toggle script.
         mkdir -p "$HOME/.local/share/applications"
         cat > "$HOME/.local/share/applications/$KDE_SHORTCUT_DESKTOP" <<EOF

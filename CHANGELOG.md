@@ -7,6 +7,20 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.5.6] - 2026-04-29
+
+### Fixed
+- **Fresh v2.5.5 install on KDE produced a broken setup.** Three problems hit one after another:
+  1. **IBus daemon never started.** Step 6 used `org.freedesktop.IBus.session.GNOME.service`, which has `Requisite=gnome-session-initialized.target` — a target that only exists on GNOME. On KDE the unit fails with "Unit gnome-session-initialized.target not found" and the daemon stays dead. Fixed: branch by DE — GNOME → GNOME unit; KDE/other → `org.freedesktop.IBus.session.generic.service` (which has `Conflicts=gnome-session-initialized.target` and is explicitly the non-GNOME variant).
+  2. **GTK apps couldn't find the IM module.** `apt install ibus-avro` doesn't pull `ibus-gtk3` / `ibus-gtk4` (they're Recommends, and apt's default config sometimes skips them). Apps logged "No IM module matching GTK_IM_MODULE=ibus found". Fixed: install both explicitly.
+  3. **KDE Plasma's Wayland InputMethod wasn't pointed at IBus.** Without `kwinrc [Wayland] InputMethod=…IBus.Panel.Wayland.Gtk3.desktop`, KWin doesn't route IM events through IBus and Plasma shows a notification asking the user to do it manually via systemsettings. Fixed: `setup-wayland.sh` KDE branch writes the kwinrc key and triggers `qdbus6 org.kde.KWin /KWin reconfigure` so it takes effect immediately.
+- **Empty preload-engines on fresh install.** A first-time install on KDE left `preload-engines` as `@as []` (empty), so the IBus tray showed nothing to switch between even with the daemon up. Fixed: setup-wayland.sh KDE branch seeds `['xkb:us::eng', 'ibus-avro']` if `ibus-avro` isn't already in the list.
+
+### Added
+- **Header-bar "Apply All Fixes" button** in `avro-manager.py`, in addition to the existing one in the Fixes section. Always visible without scrolling.
+
+---
+
 ## [2.5.5] - 2026-04-29
 
 ### Changed
