@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Avro Phonetic Manager — Full GUI for ibus-avro-fixed.
+IBus Avro Manager — Full GUI for ibus-avro-fixed.
 
 Fixes upstream ibus-avro for Wayland on GNOME 50+ and KDE Plasma 6+:
   - Left Shift key fix (keycode 42 was consumed by the engine)
@@ -270,7 +270,7 @@ class AvroManagerApp(Adw.Application):
             log.info("Window already open — bringing to front")
             self.win.present()
             return
-        log.info(f"=== Avro Phonetic Manager v{APP_VERSION} starting ===")
+        log.info(f"=== IBus Avro Manager v{APP_VERSION} starting ===")
         log.info(f"User: {os.environ.get('USER', 'unknown')} | PID: {os.getpid()}")
         log.info(f"Session: {get_session_type()} | Script dir: {SCRIPT_DIR}")
         log.info(f"Log file: {LOG_FILE}")
@@ -281,7 +281,7 @@ class AvroManagerApp(Adw.Application):
 class AvroManagerWindow(Adw.ApplicationWindow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.set_title(f"Avro Phonetic Manager v{APP_VERSION}")
+        self.set_title(f"IBus Avro Manager v{APP_VERSION}")
         self.set_default_size(640, 820)
 
         # Main layout
@@ -965,7 +965,7 @@ class AvroManagerWindow(Adw.ApplicationWindow):
             "%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
         ))
         log.addHandler(fh)
-        log.info(f"=== Log cleared — Avro Phonetic Manager v{APP_VERSION} ===")
+        log.info(f"=== Log cleared — IBus Avro Manager v{APP_VERSION} ===")
         self.show_toast("Log cleared")
 
     # ========================================================================

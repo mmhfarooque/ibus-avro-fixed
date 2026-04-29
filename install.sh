@@ -285,7 +285,7 @@ DESKTOP_FILE="$HOME/.local/share/applications/avro-manager.desktop"
 mkdir -p "$HOME/.local/share/applications"
 echo "[Desktop Entry]
 Type=Application
-Name=Avro Phonetic Manager
+Name=IBus Avro Manager
 Comment=Configure Avro Phonetic Bangla input method
 Exec=python3 $SCRIPT_DIR/avro-manager.py
 Icon=input-keyboard-symbolic
@@ -293,7 +293,7 @@ Terminal=false
 Categories=Settings;System;
 Keywords=avro;bangla;bengali;ibus;phonetic;keyboard;input;" > "$DESKTOP_FILE"
 
-ok "GUI Manager installed — search 'Avro' in app launcher"
+ok "GUI Manager installed — search 'IBus' or 'Avro' in app launcher"
 echo ""
 
 if [ "$FRESH_INSTALL" = true ]; then
@@ -308,6 +308,6 @@ if [ -f "$SCRIPT_DIR/avro-manager.py" ]; then
 fi
 
 echo ""
-echo "  Avro Phonetic Manager is now running."
-echo "  Search 'Avro' in your app launcher to open it anytime."
+echo "  IBus Avro Manager is now running."
+echo "  Search 'IBus' or 'Avro' in your app launcher to open it anytime."
 echo ""

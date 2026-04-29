@@ -4,7 +4,7 @@ Avro Phonetic lets you type Bangla by writing English phonetically — it transl
 
 The upstream `ibus-avro` was built for X11/Xorg and has been unmaintained since 2023. It has critical bugs on Ubuntu 24.04+ and Wayland. This project fixes everything and includes a modern GTK4 GUI manager that auto-detects your desktop and configures input switching the right way for it.
 
-![Avro Phonetic Manager](screenshot.png)
+![IBus Avro Manager](screenshot.png)
 
 ---
 
@@ -69,7 +69,7 @@ The original ibus-avro was built for **X11/Xorg** in 2012. Ubuntu switched to **
 
 ## GUI Manager
 
-The Avro Phonetic Manager is a full GTK4/libadwaita application. Search **"Avro"** in your app launcher.
+The IBus Avro Manager is a full GTK4/libadwaita application. Search **"Avro"** in your app launcher.
 
 **Features:**
 - **Status** — IBus daemon, Avro engine, session type (Wayland/X11), input sources

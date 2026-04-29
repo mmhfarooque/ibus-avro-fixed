@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.5.5] - 2026-04-29
+
+### Changed
+- GUI app renamed from "Avro Phonetic Manager" to **"IBus Avro Manager"** so it surfaces when users search either "ibus" or "avro" in their app launcher (KDE Kickoff / GNOME overview). The repo is `ibus-avro-fixed` and the package is `ibus-avro` — the manager's name now matches that family. Internal paths (`avro-manager.py`, `~/.local/share/avro-manager/`, `APP_ID`) are unchanged for git history continuity.
+
+---
+
 ## [2.5.4] - 2026-04-29
 
 ### Changed
