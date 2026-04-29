@@ -91,19 +91,17 @@ The GUI has a **"Check for Updates"** button. It fetches the latest from GitHub,
 
 ## Uninstall
 
-From the GUI: scroll to Maintenance → click **"Restore Upstream"**
+From terminal — **total purge** (default, since v2.5.3):
 
-From terminal:
 ```bash
 cd ~/ibus-avro-fixed && bash uninstall.sh
 ```
 
-This removes all fixes and restores stock ibus-avro. The base `ibus-avro` package stays installed.
+This removes **everything** the project ever touched: all IBus apt packages (`ibus`, `ibus-avro`, `ibus-data`, `ibus-gtk3`, `ibus-gtk4`) plus orphans, the APT hook, the toggle script, all user state (`~/.config/ibus`, `~/.local/share/avro-manager`, autostart, `environment.d/10-ibus-avro.conf`), KDE's kglobalaccel Meta+Space binding, and any running IBus processes. After it finishes, `which ibus` returns nothing and the tray icon is gone — system is in the same state as before you ever installed.
 
-To fully remove ibus-avro from the system:
-```bash
-sudo apt remove ibus-avro
-```
+This makes a fresh `bash install.sh` smoke test a one-liner: `bash uninstall.sh && bash install.sh`.
+
+From the GUI: scroll to Maintenance → click **"Restore Upstream"**. (This is **not** the same as `uninstall.sh` — it removes our patches but keeps stock `ibus-avro` installed and registered, so you go back to the upstream broken-Shift state. Use it if you want to keep IBus running but drop our customisations.)
 
 ---
 

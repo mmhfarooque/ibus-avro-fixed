@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.5.3] - 2026-04-29
+
+### Changed
+- **`uninstall.sh` now does total purge by default** (breaking change in semantics, not in API). Previous behaviour: removed our fixes and restored stock upstream `ibus-avro` — useful for "back to vanilla" but useless for repeated install/uninstall test cycles, since each run left the IBus tray icon, the registered engine, and all base packages in place. New behaviour: purges every IBus apt package (`ibus`, `ibus-avro`, `ibus-data`, `ibus-gtk3`, `ibus-gtk4`), autoremoves orphans, kills leftover daemon/helper processes, wipes user state (`~/.config/ibus`, `~/.local/share/avro-manager`, autostart, `environment.d/10-ibus-avro.conf`), unbinds the KDE kglobalaccel Meta+Space action, and removes the toggle script and APT hook. End state: `which ibus` not found, no tray icon, system identical to pre-install. A `bash uninstall.sh && bash install.sh` cycle is now a true smoke test.
+
+### Added
+- README "Uninstall" section now distinguishes the two paths: `bash uninstall.sh` = total purge (recommended); GUI "Restore Upstream" button = remove our fixes but keep stock IBus installed.
+
+---
+
 ## [2.5.2] - 2026-04-29
 
 ### Fixed
