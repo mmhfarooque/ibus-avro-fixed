@@ -118,13 +118,17 @@ From the GUI: scroll to Maintenance → click **"Restore Upstream"**. (This is *
 
 ## Supported Systems
 
-- Ubuntu 24.04 / 26.04 LTS (GNOME)
-- Kubuntu 24.04 / 26.04 LTS (KDE Plasma 6)
-- Debian 12+ (Bookworm)
-- Linux Mint 21+ / Pop!_OS 22.04+
-- Any Debian-based distro running IBus on GNOME, KDE Plasma, or another Wayland compositor
+**Verified working** (smoke-tested end-to-end on v2.5.x):
+- **Kubuntu 26.04 LTS — KDE Plasma 6.6.4 Wayland**
 
-A single install supports both GNOME and KDE — no separate version. The installer detects `XDG_CURRENT_DESKTOP` and configures Super+Space switching the right way for your desktop.
+**Code path preserved from v2.4.0 (which was working) — re-verification for v2.5.x pending**:
+- **Ubuntu 26.04 LTS — GNOME 50+ Wayland**
+
+A single install supports both GNOME and KDE. The installer detects `XDG_CURRENT_DESKTOP` and configures Super+Space switching the right way for your desktop.
+
+**Not supported** in the current installer:
+- Fedora, Arch, openSUSE — `install.sh` uses `apt`/`dpkg` and the APT hook lives in `/etc/apt/apt.conf.d/`. The patches themselves (the keycode 42 fix, GTK4 prefs, kglobalaccel binding) are distro-agnostic and could be ported, but the install scripts haven't been written or tested for `dnf` / `pacman` / `zypper`. Pull requests welcome.
+- Debian, Linux Mint, Pop!_OS, KDE Neon, older Ubuntu/Kubuntu — same Debian-based code path so they *should* work, but I haven't tested any of them on the v2.5.x line. Try at your own risk; file an issue if anything breaks.
 
 ---
 

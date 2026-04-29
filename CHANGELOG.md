@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.5.9] - 2026-04-29
+
+### Changed
+- **README "Supported Systems" trimmed to what's actually been verified.** Previous lists made unsupported claims about Debian, Mint, Pop!_OS, etc. Now: Kubuntu 26.04 / Plasma 6.6.4 Wayland is the only thing marked "Verified working". Ubuntu 26.04 / GNOME 50+ is "code path preserved from v2.4.0, re-verification pending". Everything else is explicitly "not personally tested on v2.5.x — try at your own risk". Fedora/Arch/openSUSE are explicitly not supported by the current `apt`-only installer.
+
+---
+
 ## [2.5.8] - 2026-04-29
 
 ### Changed
