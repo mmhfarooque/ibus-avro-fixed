@@ -312,7 +312,26 @@ Keywords=avro;bangla;bengali;ibus;phonetic;keyboard;input;" > "$DESKTOP_FILE"
 ok "GUI Manager installed — search 'IBus' or 'Avro' in app launcher"
 echo ""
 
-if [ "$FRESH_INSTALL" = true ]; then
+if [ "$CURRENT_DE" = "kde" ]; then
+    echo ""
+    echo "  ============================================"
+    echo -e "  ${YELLOW}KDE Plasma — log out and log back in${NC}"
+    echo "  ============================================"
+    echo ""
+    echo "  The IBus Wayland integration is set in kwinrc, but Plasma's"
+    echo "  Virtual Keyboard service (which actually starts and attaches"
+    echo "  IBus to KWin's input dispatch) only re-attaches at session"
+    echo "  start. Without a logout/login:"
+    echo "    - Bangla typing may produce English in some apps"
+    echo "    - Super+Space may not switch (kglobalaccel binding waits"
+    echo "      on the IM service that hasn't started yet)"
+    echo "    - You'll see the 'IBus should be called from the desktop"
+    echo "      session in Wayland' notification"
+    echo ""
+    echo "  After logout/login: Super+Space switches, typing works, no"
+    echo "  more notification. This is a one-time per-install cost."
+    echo ""
+elif [ "$FRESH_INSTALL" = true ]; then
     echo "  NOTE: Log out and log back in for iBus to fully load."
 fi
 logmsg "=== INSTALL COMPLETE ==="

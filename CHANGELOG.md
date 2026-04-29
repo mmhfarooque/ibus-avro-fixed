@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.5.7] - 2026-04-29
+
+### Changed
+- Install output now ends with a clear **"Log out and log back in"** banner on KDE, explaining *why* it's needed: Plasma's Virtual Keyboard service (which attaches IBus to KWin's input dispatch) only re-attaches at session start, so even with `kwinrc` set correctly the binding doesn't take effect until next login. Until then, typing may stay English and Super+Space may not switch — these are the symptoms of a not-yet-attached IM service, not a broken install.
+
+---
+
 ## [2.5.6] - 2026-04-29
 
 ### Fixed
