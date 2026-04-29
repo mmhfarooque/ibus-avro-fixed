@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.5.4] - 2026-04-29
+
+### Changed
+- `uninstall.sh` now also removes its own source directory (the cloned `~/ibus-avro-fixed`) as the final step. v2.5.3 left the repo in place, which meant the README's `git clone … ~/ibus-avro-fixed && bash install.sh` re-test failed with `destination path already exists`. "Uninstall like it never existed" means the source tree goes too.
+
+---
+
 ## [2.5.3] - 2026-04-29
 
 ### Changed

@@ -26,6 +26,8 @@
 
 set -u
 
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -131,8 +133,15 @@ else
 fi
 
 # ============================================================================
+# Step 6: Remove the source directory itself (this script's own home)
+# ============================================================================
+# Without this, the cloned repo lingers and blocks a fresh `git clone` to
+# the same path. "Uninstall like it never existed" means the source tree
+# goes too. Bash holds the script in memory once started, so deleting the
+# file under our feet is safe; we cd out first so the shell's CWD is valid.
 echo ""
-echo "============================================"
 echo -e "  ${GREEN}Uninstall complete.${NC} IBus is gone."
-echo "============================================"
+echo ""
+echo "Removing source directory: $SCRIPT_DIR"
+cd / && rm -rf "$SCRIPT_DIR"
 echo ""
