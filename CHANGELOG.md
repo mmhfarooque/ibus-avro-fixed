@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.5.8] - 2026-04-29
+
+### Changed
+- README "After install" section now leads with a prominent **⚠️ Log out and log back in** callout. Confirmed on Kubuntu 26.04 Plasma 6.6.4 Wayland: after one logout/login post-install, Super+Space switching, Bangla typing, and the IBus startup notification all resolve cleanly. Subsequent install re-runs do not require another logout.
+
+---
+
 ## [2.5.7] - 2026-04-29
 
 ### Changed

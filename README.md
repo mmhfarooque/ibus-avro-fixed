@@ -26,7 +26,18 @@ That's it. The installer handles everything:
 
 ### After install
 
-**One-time setup — register Avro with IBus:**
+> ### ⚠️ Log out and log back in (one-time)
+>
+> The installer does everything that *can* be done from a script, but the desktop session's input-method service only attaches at session start. Log out and log back in once after `install.sh` finishes. After that, Super+Space switching, Bangla typing, and the IBus tray icon all work normally.
+>
+> Symptoms if you skip this step (especially on KDE Plasma 6 Wayland):
+> - Bangla typing stays English in some apps
+> - Super+Space doesn't switch
+> - "IBus should be called from the desktop session in Wayland" notification keeps appearing
+>
+> A full reboot also works. Once is enough — subsequent `install.sh` re-runs (e.g. to apply a new release) do not require another logout.
+
+**One-time setup — register Avro with IBus** (after the logout/login):
 
 1. Right-click the **IBus tray icon** → **Preferences**
 2. Open the **Input Method** tab → click **Add**
@@ -39,7 +50,7 @@ That's it. The installer handles everything:
 1. Press **Super+Space** to switch between English and Bangla
 2. Type `ami bangla likhte pari` → আমি বাংলা লিখতে পারি
 
-Super+Space works immediately on KDE Plasma 6 (bound via kglobalaccel) and on GNOME (bound via Mutter). No logout/login required after install.
+Super+Space is bound at the desktop level: GNOME via Mutter (`org.gnome.desktop.wm.keybindings`), KDE Plasma 6 via kglobalaccel + a toggle script. Both DEs route the hotkey without IBus's broken-on-Wayland keygrab.
 
 ---
 
