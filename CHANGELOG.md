@@ -7,6 +7,24 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.5.0] - 2026-04-29
+
+### Added
+- **KDE Plasma 6 support** — single install now works on both GNOME and KDE Plasma 6 Wayland. `setup-wayland.sh` and the GUI auto-detect `XDG_CURRENT_DESKTOP` and choose the right switching backend:
+  - **GNOME:** sets `org.gnome.desktop.wm.keybindings switch-input-source` (Mutter intercepts the shortcut), clears IBus trigger to avoid conflicts.
+  - **KDE / other:** sets `org.freedesktop.ibus.general.hotkey trigger` to `['<Super>space']` (IBus owns the hotkey, since KWin does not intercept Super+Space by default on Plasma 6).
+- `detect_de()` helper in `avro-manager.py`; six callsites branched off it (input-source reader, switching-configured check, shortcut display, "Configure" button, "Open Keyboard Settings" button).
+- README: new "Why two different switching strategies?" section explaining the per-DE behaviour.
+
+### Fixed
+- **Autostart `.desktop` rejected by systemd-xdg-autostart-generator on every boot** with `Undefined escape sequence \"`. The previous `Exec=bash -c "...\"['<Super>space']\"..."` violated the desktop-entry spec; the entry was silently dropped, so dconf resets between sessions weren't being re-applied. Replaced with a normal `Exec=/path/to/setup-wayland.sh` and a real script — no inline bash escapes.
+- **`get_current_input_sources()`** was reading `org.gnome.desktop.input-sources sources`, which doesn't exist on KDE. Now reads `org.freedesktop.ibus.general preload-engines` (universal across DEs).
+
+### Changed
+- "Open GNOME Keyboard Settings" maintenance row → "Open Keyboard Settings"; on KDE it launches `systemsettings kcm_keyboard` (with `kcmshell6/5` fallbacks).
+
+---
+
 ## [2.4.0] - 2026-04-12
 
 ### Fixed

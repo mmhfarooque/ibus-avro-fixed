@@ -2,14 +2,14 @@
 """
 Avro Phonetic Manager — Full GUI for ibus-avro-fixed.
 
-Fixes upstream ibus-avro for Ubuntu Wayland / GNOME 50+:
+Fixes upstream ibus-avro for Wayland on GNOME 50+ and KDE Plasma 6+:
   - Left Shift key fix (keycode 42 was consumed by the engine)
   - Right Shift key fix (keycode 54)
   - Super+Space input switching (X11 key grabs don't work on Wayland)
   - GTK4/libadwaita preferences (replaces broken GTK3 prefs)
   - APT hook for persistence across system updates
 
-Uses GTK4 + libadwaita for native GNOME look.
+Uses GTK4 + libadwaita; runs on GNOME, KDE Plasma, and other DEs.
 """
 
 import gi
@@ -123,9 +123,21 @@ def get_session_type():
     return "x11"
 
 
+def detect_de():
+    """Return 'gnome', 'kde', or 'other' from XDG_CURRENT_DESKTOP."""
+    de = os.environ.get("XDG_CURRENT_DESKTOP", "").upper()
+    if "GNOME" in de:
+        return "gnome"
+    if "KDE" in de:
+        return "kde"
+    return "other"
+
+
 def get_current_input_sources():
+    # IBus's preload-engines schema works on every DE; GNOME's
+    # org.gnome.desktop.input-sources only exists on GNOME.
     rc, out, _ = run_cmd([
-        "gsettings", "get", "org.gnome.desktop.input-sources", "sources"
+        "gsettings", "get", "org.freedesktop.ibus.general", "preload-engines"
     ])
     return out if rc == 0 else "Unknown"
 
@@ -162,9 +174,12 @@ def is_apt_hook_installed():
 
 
 def is_wayland_switching_configured():
-    rc, out, _ = run_cmd([
-        "gsettings", "get", "org.gnome.desktop.wm.keybindings", "switch-input-source"
-    ])
+    # On GNOME the WM owns the shortcut; on KDE/other IBus owns it.
+    if detect_de() == "gnome":
+        schema, key = "org.gnome.desktop.wm.keybindings", "switch-input-source"
+    else:
+        schema, key = "org.freedesktop.ibus.general.hotkey", "trigger"
+    rc, out, _ = run_cmd(["gsettings", "get", schema, key])
     return "<Super>space" in out if rc == 0 else False
 
 
@@ -203,9 +218,11 @@ def set_avro_setting(key, value):
 
 
 def get_switch_shortcut():
-    rc, out, _ = run_cmd([
-        "gsettings", "get", "org.gnome.desktop.wm.keybindings", "switch-input-source"
-    ])
+    if detect_de() == "gnome":
+        schema, key = "org.gnome.desktop.wm.keybindings", "switch-input-source"
+    else:
+        schema, key = "org.freedesktop.ibus.general.hotkey", "trigger"
+    rc, out, _ = run_cmd(["gsettings", "get", schema, key])
     if rc == 0 and out:
         match = re.search(r"'([^']+)'", out)
         shortcut = match.group(1) if match else out
@@ -338,28 +355,19 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         group.add(apply_row)
 
     def on_configure_switching(self, btn):
-        log.info("User: Configure Super+Space switching")
+        de = detect_de()
+        log.info(f"User: Configure Super+Space switching (DE: {de})")
         btn.set_sensitive(False)
 
         def do_configure():
-            run_cmd(["gsettings", "set", "org.gnome.desktop.wm.keybindings",
-                     "switch-input-source", "['<Super>space']"])
-            run_cmd(["gsettings", "set", "org.gnome.desktop.wm.keybindings",
-                     "switch-input-source-backward", "['<Shift><Super>space']"])
-            run_cmd(["gsettings", "set", "org.freedesktop.ibus.general.hotkey",
-                     "trigger", "['']"])
-
-            autostart_dir = os.path.expanduser("~/.config/autostart")
-            os.makedirs(autostart_dir, exist_ok=True)
-            with open(os.path.join(autostart_dir, "ibus-avro-wayland-fix.desktop"), "w") as f:
-                f.write('[Desktop Entry]\nType=Application\nName=iBus Avro Wayland Fix\n')
-                f.write("Exec=bash -c \"gsettings set org.gnome.desktop.wm.keybindings ")
-                f.write("switch-input-source \\\"['<Super>space']\\\" && gsettings set ")
-                f.write("org.gnome.desktop.wm.keybindings switch-input-source-backward ")
-                f.write("\\\"['<Shift><Super>space']\\\"\"\n")
-                f.write("Hidden=false\nNoDisplay=true\nX-GNOME-Autostart-enabled=true\n")
-
-            log.info("Super+Space switching configured")
+            # setup-wayland.sh handles all DE branching and writes the
+            # autostart entry. Single source of truth for the shortcut logic.
+            script = os.path.join(SCRIPT_DIR, "setup-wayland.sh")
+            rc, out, err = run_cmd(["bash", script], timeout=15)
+            if rc != 0:
+                log.warning(f"setup-wayland.sh failed: rc={rc} stderr={err[:200]!r}")
+            else:
+                log.info("Super+Space switching configured")
 
             def _done():
                 btn.set_sensitive(True)
@@ -465,7 +473,7 @@ class AvroManagerWindow(Adw.ApplicationWindow):
     def build_fixes_section(self, parent):
         group = Adw.PreferencesGroup(
             title="Fix Status",
-            description="Status of all applied bug fixes for Wayland / GNOME 50+",
+            description="Status of all applied bug fixes for Wayland (GNOME / KDE Plasma)",
         )
         parent.append(group)
 
@@ -568,7 +576,7 @@ class AvroManagerWindow(Adw.ApplicationWindow):
         # Add input source
         source_row = Adw.ActionRow(
             title="Add Bangla Input Source",
-            subtitle="Open GNOME Keyboard Settings to add Avro Phonetic",
+            subtitle="Open Keyboard Settings to add Avro Phonetic",
         )
         source_row.add_prefix(Gtk.Image.new_from_icon_name("preferences-desktop-keyboard-symbolic"))
         source_btn = Gtk.Button(label="Open Settings", valign=Gtk.Align.CENTER)
@@ -755,8 +763,22 @@ class AvroManagerWindow(Adw.ApplicationWindow):
             self.show_toast("pref.js not found — run Apply All Fixes first")
 
     def on_open_keyboard_settings(self, btn):
-        log.info("User: Open GNOME Keyboard Settings")
-        subprocess.Popen(["gnome-control-center", "keyboard"])
+        de = detect_de()
+        log.info(f"User: Open Keyboard Settings (DE: {de})")
+        candidates = {
+            "gnome": [["gnome-control-center", "keyboard"]],
+            "kde":   [["systemsettings", "kcm_keyboard"],
+                      ["kcmshell6", "kcm_keyboard"],
+                      ["kcmshell5", "kcm_keyboard"]],
+        }.get(de, [["xdg-open", "settings://"]])
+
+        for cmd in candidates:
+            try:
+                subprocess.Popen(cmd)
+                return
+            except FileNotFoundError:
+                continue
+        self.show_toast("No keyboard settings command found for this desktop")
 
     # ========================================================================
     # Uninstall (Restore Upstream)

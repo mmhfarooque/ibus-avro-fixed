@@ -1,8 +1,8 @@
-# ibus-avro-fixed — Avro Phonetic Bangla for Linux (Left Shift Fix + Wayland + GNOME 50)
+# ibus-avro-fixed — Avro Phonetic Bangla for Linux (Left Shift Fix + Wayland + GNOME / KDE)
 
-Avro Phonetic lets you type Bangla by writing English phonetically — it transliterates as you type. This is a **fixed fork** of [ibus-avro](https://github.com/sarim/ibus-avro) that solves all known bugs including the **Left Shift key bug** and **Wayland input switching** on modern Ubuntu/GNOME.
+Avro Phonetic lets you type Bangla by writing English phonetically — it transliterates as you type. This is a **fixed fork** of [ibus-avro](https://github.com/sarim/ibus-avro) that solves all known bugs including the **Left Shift key bug** and **Wayland input switching** on modern Ubuntu (GNOME) and Kubuntu (KDE Plasma).
 
-The upstream `ibus-avro` was built for X11/Xorg and has been unmaintained since 2023. It has critical bugs on Ubuntu 24.04+ and Wayland. This project fixes everything and includes a modern GTK4 GUI manager.
+The upstream `ibus-avro` was built for X11/Xorg and has been unmaintained since 2023. It has critical bugs on Ubuntu 24.04+ and Wayland. This project fixes everything and includes a modern GTK4 GUI manager that auto-detects your desktop and configures input switching the right way for it.
 
 ![Avro Phonetic Manager](screenshot.png)
 
@@ -38,10 +38,17 @@ That's it. The installer handles everything:
 |-----|----------|---------------------|-----------|
 | Left Shift key broken | **Critical** | Consumes keycode 42 | Passes through |
 | Right Shift key broken | **Critical** | Not handled | Passes through |
-| Input switching on Wayland | **Medium** | X11 key grabs, broken | GNOME gsettings |
+| Input switching on Wayland | **Medium** | X11 key grabs, broken | DE-aware (GNOME WM keybinding / IBus trigger on KDE) |
 | Preferences window | **Medium** | GTK3, broken on GNOME 42+ | GTK4 + libadwaita |
 | Updates break fixes | **Low** | No solution | APT hook auto-fixes |
 | Debug log spam | **Low** | Every keypress logged | Disabled |
+
+### Why two different switching strategies?
+
+- **GNOME (Mutter/Wayland):** the compositor intercepts global shortcuts before applications see them, so IBus's own hotkey can't fire. We set `org.gnome.desktop.wm.keybindings switch-input-source` to `<Super>space` and clear IBus's trigger to avoid conflicts.
+- **KDE Plasma 6+ (KWin/Wayland):** KWin does **not** intercept `Super+Space` by default (KRunner is `Alt+Space` on Plasma 6), so IBus owns the hotkey directly via `org.freedesktop.ibus.general.hotkey trigger`. No DE-level shortcut is set — KDE's own keyboard layout switcher is left alone.
+
+`setup-wayland.sh` and the GUI's "Configure Super+Space" button auto-detect the desktop via `XDG_CURRENT_DESKTOP` and apply the right one.
 
 ### Why these bugs exist
 
@@ -91,11 +98,13 @@ sudo apt remove ibus-avro
 
 ## Supported Systems
 
-- Ubuntu 24.04 LTS (Noble Numbat)
-- Ubuntu 26.04 LTS (Resolute Raccoon)
+- Ubuntu 24.04 / 26.04 LTS (GNOME)
+- Kubuntu 24.04 / 26.04 LTS (KDE Plasma 6)
 - Debian 12+ (Bookworm)
 - Linux Mint 21+ / Pop!_OS 22.04+
-- Any Debian-based distro with IBus and GNOME
+- Any Debian-based distro running IBus on GNOME, KDE Plasma, or another Wayland compositor
+
+A single install supports both GNOME and KDE — no separate version. The installer detects `XDG_CURRENT_DESKTOP` and configures Super+Space switching the right way for your desktop.
 
 ---
 
@@ -121,10 +130,12 @@ Full phonetic rules: [Avro Phonetic Layout](https://avro.im/layout)
 | Problem | Solution |
 |---------|----------|
 | Super+Space doesn't switch | Open GUI Manager → "Configure Super+Space Switching" |
+| Super+Space conflicts with KRunner / KWin shortcut on KDE | Open System Settings → Shortcuts → Global Shortcuts and unbind anything on `Meta+Space` |
 | Left Shift still broken | Open GUI Manager → "Apply All Fixes" |
-| Avro not in input source list | Run `ibus restart`, then add in Settings → Keyboard |
+| Avro not in input source list | Run `ibus restart`, then add in your DE's Keyboard settings |
 | Fixes disappear after update | APT hook should handle this. If not, run `bash install.sh` again |
 | Nothing works after reboot | Log out and log back in (IBus starts on login) |
+| `ibus-ui-gtk3: Window is a temporary window without parent` warnings on KDE | Harmless. Upstream IBus indicator quirk under KWin/Wayland — not from this project. |
 
 For detailed debugging, open the GUI Manager → **Diagnostics → View Log** → copy and paste.
 
