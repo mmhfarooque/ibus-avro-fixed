@@ -174,12 +174,31 @@ def is_apt_hook_installed():
 
 
 def is_wayland_switching_configured():
-    # On GNOME the WM owns the shortcut; on KDE/other IBus owns it.
-    if detect_de() == "gnome":
-        schema, key = "org.gnome.desktop.wm.keybindings", "switch-input-source"
-    else:
-        schema, key = "org.freedesktop.ibus.general.hotkey", "trigger"
-    rc, out, _ = run_cmd(["gsettings", "get", schema, key])
+    # GNOME: WM owns the shortcut (gnome.desktop.wm.keybindings).
+    # KDE:   kglobalaccel owns it; we registered it under our .desktop file.
+    # Other: best-effort IBus trigger.
+    de = detect_de()
+    if de == "gnome":
+        rc, out, _ = run_cmd([
+            "gsettings", "get", "org.gnome.desktop.wm.keybindings", "switch-input-source"
+        ])
+        return "<Super>space" in out if rc == 0 else False
+    if de == "kde":
+        # Ask kglobalaccel directly via gdbus — survives even if the
+        # kglobalshortcutsrc file hasn't been flushed yet.
+        action_id = ("['com.github.mmhfarooque.ibus-avro-toggle.desktop',"
+                     "'_launch','Toggle Avro/English Input',"
+                     "'Toggle Avro/English Input']")
+        rc, out, _ = run_cmd([
+            "gdbus", "call", "--session", "--dest", "org.kde.kglobalaccel",
+            "--object-path", "/kglobalaccel",
+            "--method", "org.kde.KGlobalAccel.shortcut", action_id,
+        ])
+        # Meta+Space = 268435488; presence of any non-zero binding = configured
+        return rc == 0 and "268435488" in out
+    rc, out, _ = run_cmd([
+        "gsettings", "get", "org.freedesktop.ibus.general.hotkey", "trigger"
+    ])
     return "<Super>space" in out if rc == 0 else False
 
 
@@ -218,7 +237,12 @@ def set_avro_setting(key, value):
 
 
 def get_switch_shortcut():
-    if detect_de() == "gnome":
+    de = detect_de()
+    if de == "kde":
+        # On KDE the binding lives in kglobalaccel; if our action is bound,
+        # report Meta+Space directly.
+        return "Meta + Space" if is_wayland_switching_configured() else "Not set"
+    if de == "gnome":
         schema, key = "org.gnome.desktop.wm.keybindings", "switch-input-source"
     else:
         schema, key = "org.freedesktop.ibus.general.hotkey", "trigger"

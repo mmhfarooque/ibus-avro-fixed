@@ -20,12 +20,21 @@ logmsg "=== CLI UNINSTALL STARTING ==="
 echo "[1/4] Removing APT hook..."
 sudo rm -f /etc/apt/apt.conf.d/99-fix-ibus-avro
 sudo rm -f /usr/local/bin/fix-ibus-avro.sh
+sudo rm -f /usr/local/bin/ibus-avro-toggle
 echo "  Done"
 
-# Remove autostart entry and environment config
+# Remove autostart entry, env config, KDE shortcut artifacts
 echo "[2/4] Removing autostart entry and environment config..."
 rm -f "$HOME/.config/autostart/ibus-avro-wayland-fix.desktop"
 rm -f "$HOME/.config/environment.d/10-ibus-avro.conf"
+rm -f "$HOME/.local/share/applications/com.github.mmhfarooque.ibus-avro-toggle.desktop"
+# Unbind kglobalaccel Meta+Space if KDE
+if command -v gdbus >/dev/null 2>&1 && [ -n "$(echo "$XDG_CURRENT_DESKTOP" | grep -i KDE)" ]; then
+    ACTION_ID="['com.github.mmhfarooque.ibus-avro-toggle.desktop','_launch','Toggle Avro/English Input','Toggle Avro/English Input']"
+    gdbus call --session --dest org.kde.kglobalaccel \
+        --object-path /kglobalaccel \
+        --method org.kde.KGlobalAccel.unRegister "$ACTION_ID" >/dev/null 2>&1 || true
+fi
 echo "  Done"
 
 # Reinstall stock ibus-avro to restore original files

@@ -7,6 +7,25 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.5.2] - 2026-04-29
+
+### Fixed
+- **Super+Space did not actually work on KDE Plasma 6 Wayland in v2.5.0** — the IBus hotkey trigger (`org.freedesktop.ibus.general.hotkey trigger`) is X11-era (relies on X keygrabs) and is decorative on Wayland. v2.5.0's KDE branch set it but the daemon couldn't enforce it, so users had to log out/in or fall back to the IBus tray menu. **Fix:** new `ibus-avro-toggle.sh` (installed to `/usr/local/bin/ibus-avro-toggle`) plus a user `.desktop` file, registered live with `org.kde.KGlobalAccel.setShortcut` via DBus. Binding takes effect immediately, persists across logins via `~/.config/kglobalshortcutsrc`.
+- **IBus startup notification "unset QT_IM_MODULE / GTK_IM_MODULE"** — v2.4.0 added `~/.config/environment.d/10-ibus-avro.conf` setting those vars, which is correct for GNOME 50+ Wayland (GNOME doesn't auto-export them) but wrong for KDE Plasma 6 Wayland (`text-input-v3` handles IM natively, the vars are redundant and trigger the warning). Now branched: GNOME/other write the env file, KDE skips it (and removes any stale copy from a prior install on the same machine).
+- **IBus startup notification "ibus-daemon should be executed as a child process of ibus-ui-gtk3"** — `ibus restart` (step 6 of `install.sh`) re-launched the daemon directly, so its parent was the install shell instead of `ibus-ui-gtk3 --enable-wayland-im --exec-daemon`. Replaced with `systemctl --user restart org.freedesktop.IBus.session.GNOME.service` (the universal user unit shipped by IBus, used by Kubuntu / Pop / Mint too despite the name). Falls back to `ibus restart` if the unit isn't present.
+
+### Added
+- `ibus-avro-toggle.sh` (new repo file) — two-engine toggle (`ibus-avro` ↔ `xkb:us::eng`), invoked by KDE's kglobalaccel binding.
+- README "After install" section now covers the right-click → IBus tray → Preferences → Input Method → Bangla → Avro Phonetic flow as the canonical first-time setup.
+- Troubleshooting note about Kubuntu 26.04's `plasma-kglobalaccel5.service` packaging bug (both Plasma 5 and Plasma 6 unit files ship in the package, conflicting on the same DBus name; mask the .5 one).
+
+### Changed
+- `setup-wayland.sh` KDE branch no longer sets the IBus trigger; it now writes `~/.local/share/applications/com.github.mmhfarooque.ibus-avro-toggle.desktop` and DBus-registers Meta+Space.
+- `avro-manager.py`: `is_wayland_switching_configured()` and `get_switch_shortcut()` now query `org.kde.kglobalaccel` on KDE instead of the (broken-on-Wayland) IBus trigger gsetting.
+- `uninstall.sh`: removes the new toggle script (`/usr/local/bin/ibus-avro-toggle`), the desktop file, and unbinds the kglobalaccel action.
+
+---
+
 ## [2.5.0] - 2026-04-29
 
 ### Added

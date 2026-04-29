@@ -26,9 +26,20 @@ That's it. The installer handles everything:
 
 ### After install
 
-1. Open **Settings → Keyboard → Input Sources** → add **Bangla (Avro Phonetic)**
-2. Press **Super+Space** to switch between English and Bangla
-3. Type `ami bangla likhte pari` → আমি বাংলা লিখতে পারি
+**One-time setup — register Avro with IBus:**
+
+1. Right-click the **IBus tray icon** → **Preferences**
+2. Open the **Input Method** tab → click **Add**
+3. Expand **Bangla** → select **Avro Phonetic** → **OK**
+
+(On GNOME you can also use **Settings → Keyboard → Input Sources → Add**. KDE has a similar path under System Settings, but the IBus tray menu is the canonical one.)
+
+**Then start typing:**
+
+1. Press **Super+Space** to switch between English and Bangla
+2. Type `ami bangla likhte pari` → আমি বাংলা লিখতে পারি
+
+Super+Space works immediately on KDE Plasma 6 (bound via kglobalaccel) and on GNOME (bound via Mutter). No logout/login required after install.
 
 ---
 
@@ -45,10 +56,10 @@ That's it. The installer handles everything:
 
 ### Why two different switching strategies?
 
-- **GNOME (Mutter/Wayland):** the compositor intercepts global shortcuts before applications see them, so IBus's own hotkey can't fire. We set `org.gnome.desktop.wm.keybindings switch-input-source` to `<Super>space` and clear IBus's trigger to avoid conflicts.
-- **KDE Plasma 6+ (KWin/Wayland):** KWin does **not** intercept `Super+Space` by default (KRunner is `Alt+Space` on Plasma 6), so IBus owns the hotkey directly via `org.freedesktop.ibus.general.hotkey trigger`. No DE-level shortcut is set — KDE's own keyboard layout switcher is left alone.
+- **GNOME (Mutter/Wayland):** the compositor intercepts global shortcuts before applications see them, so IBus's own hotkey can't fire. We set `org.gnome.desktop.wm.keybindings switch-input-source` to `<Super>space` — Mutter handles it.
+- **KDE Plasma 6+ (KWin/Wayland):** IBus's own `org.freedesktop.ibus.general.hotkey trigger` schema is X11-era (relies on X keygrabs) and is decorative on Wayland. We bind `Meta+Space` at the KDE level via `kglobalaccel` → `/usr/local/bin/ibus-avro-toggle`, registered live through DBus (`org.kde.KGlobalAccel.setShortcut`). Works in-session — no logout required.
 
-`setup-wayland.sh` and the GUI's "Configure Super+Space" button auto-detect the desktop via `XDG_CURRENT_DESKTOP` and apply the right one.
+`setup-wayland.sh` auto-detects the desktop via `XDG_CURRENT_DESKTOP` and runs the right path. The GUI's "Configure Super+Space" button just calls the same script.
 
 ### Why these bugs exist
 
@@ -136,6 +147,8 @@ Full phonetic rules: [Avro Phonetic Layout](https://avro.im/layout)
 | Fixes disappear after update | APT hook should handle this. If not, run `bash install.sh` again |
 | Nothing works after reboot | Log out and log back in (IBus starts on login) |
 | `ibus-ui-gtk3: Window is a temporary window without parent` warnings on KDE | Harmless. Upstream IBus indicator quirk under KWin/Wayland — not from this project. |
+| IBus notification: "unset QT_IM_MODULE / GTK_IM_MODULE / ibus-daemon should be a child of ibus-ui-gtk3" | v2.5.2+ install avoids this on KDE (skips the env file, restarts via the systemd user unit so the daemon is properly parented). If you saw it after a v2.5.0/2.5.1 install, re-run `bash install.sh`. |
+| Spectacle screenshot fails with "Did not receive a reply" on Kubuntu 26.04 | Known Kubuntu 26.04 packaging bug — both `plasma-kglobalaccel.service` and `plasma-kglobalaccel5.service` ship together, conflicting on the same DBus name. Workaround: `systemctl --user mask plasma-kglobalaccel5.service`. |
 
 For detailed debugging, open the GUI Manager → **Diagnostics → View Log** → copy and paste.
 

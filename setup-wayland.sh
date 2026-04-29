@@ -4,25 +4,29 @@
 # ============================================================================
 # Branches by desktop environment:
 #
-#   GNOME    — GNOME's Mutter/Wayland intercepts global shortcuts. IBus's
-#              own hotkey can't see Super+Space, so we set GNOME's
-#              `switch-input-source` keybinding and clear the IBus trigger
-#              to avoid conflicts.
+#   GNOME    — Mutter intercepts global shortcuts on Wayland. Set
+#              `org.gnome.desktop.wm.keybindings switch-input-source` to
+#              <Super>space and clear IBus's own trigger to avoid conflict.
 #
-#   KDE      — KWin does NOT intercept Super+Space by default (KRunner is
-#              Alt+Space on Plasma 6), so IBus owns the hotkey directly via
-#              the universal `org.freedesktop.ibus.general.hotkey trigger`
-#              schema.
+#   KDE      — Bind Meta+Space at the KDE level via kglobalaccel → toggle
+#              script (`/usr/local/bin/ibus-avro-toggle`). IBus's own trigger
+#              gsetting is X11-era keygrabs and is decorative on Wayland;
+#              we don't bother with it. The kglobalaccel binding is applied
+#              live via DBus, so it works in the current session — no
+#              logout/login required.
 #
-#   Other    — Same as KDE: let IBus own the hotkey. Works on sway,
-#              Hyprland, XFCE+IBus, etc.
+#   Other    — Best-effort: try the IBus trigger (works on some compositors
+#              like sway via fallback IM module).
 #
-# An autostart entry is created so the gsetting is re-applied on every
-# login (some DEs reset dconf user values during graphical-session start).
+# An autostart entry is created so the GNOME branch's keybinding is
+# re-applied on every login (some sessions reset dconf user values during
+# graphical-session start). KDE doesn't need autostart — kglobalaccel
+# persists shortcuts itself in ~/.config/kglobalshortcutsrc.
 # ============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DE="${XDG_CURRENT_DESKTOP:-}"
+KDE_SHORTCUT_DESKTOP="com.github.mmhfarooque.ibus-avro-toggle.desktop"
 
 case "$(echo "$DE" | tr '[:lower:]' '[:upper:]')" in
     *GNOME*)  BACKEND=gnome ;;
@@ -45,28 +49,12 @@ case "$BACKEND" in
         gsettings set org.gnome.desktop.wm.keybindings switch-input-source-backward "['<Shift><Super>space']" 2>/dev/null
         # Clear IBus trigger — conflicts with GNOME's WM-level shortcut
         gsettings set org.freedesktop.ibus.general.hotkey trigger "['']" 2>/dev/null || true
-        echo "  Super+Space          = switch input source (GNOME WM)"
+        echo "  Super+Space          = switch input source (GNOME WM keybinding)"
         echo "  Shift+Super+Space    = switch back"
-        ;;
-    kde|other)
-        gsettings set org.freedesktop.ibus.general.hotkey trigger "['<Super>space']" 2>/dev/null
-        # Don't clobber GNOME's WM keybinding if it was previously set on this user;
-        # it's harmless on KDE (GNOME schema isn't read here) but leave it.
-        echo "  Super+Space          = switch input source (IBus trigger)"
-        if [ "$BACKEND" = "kde" ]; then
-            echo "  Note: if KDE has a global shortcut on Super+Space (e.g. KRunner),"
-            echo "        unbind it in System Settings → Shortcuts → Global Shortcuts."
-        fi
-        ;;
-esac
 
-# ----------------------------------------------------------------------------
-# Autostart: re-apply on every login. Runs this same script — no inline
-# bash with escaped quotes (which violates the .desktop spec and is
-# rejected by systemd-xdg-autostart-generator).
-# ----------------------------------------------------------------------------
-mkdir -p "$HOME/.config/autostart"
-cat > "$HOME/.config/autostart/ibus-avro-wayland-fix.desktop" <<EOF
+        # Re-apply on login via autostart (uses this same script)
+        mkdir -p "$HOME/.config/autostart"
+        cat > "$HOME/.config/autostart/ibus-avro-wayland-fix.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=iBus Avro Wayland Fix
@@ -76,5 +64,64 @@ Hidden=false
 NoDisplay=true
 X-GNOME-Autostart-enabled=true
 EOF
+        echo "  Autostart entry: $HOME/.config/autostart/ibus-avro-wayland-fix.desktop"
+        ;;
 
-echo "  Autostart entry: $HOME/.config/autostart/ibus-avro-wayland-fix.desktop"
+    kde)
+        # Clear the (decorative) IBus trigger in case v2.5.0 / v2.5.1 set it.
+        gsettings set org.freedesktop.ibus.general.hotkey trigger "['']" 2>/dev/null || true
+
+        # 1. Install user-level desktop entry pointing at the toggle script.
+        mkdir -p "$HOME/.local/share/applications"
+        cat > "$HOME/.local/share/applications/$KDE_SHORTCUT_DESKTOP" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Toggle Avro / English (IBus)
+Comment=Switch between Bangla Avro Phonetic and English input
+Exec=/usr/local/bin/ibus-avro-toggle
+Icon=input-keyboard-symbolic
+NoDisplay=true
+Terminal=false
+StartupNotify=false
+EOF
+
+        # 2. Live-register the Meta+Space shortcut with kglobalaccel via DBus.
+        #    Action ID: [componentUniqueName, actionName, friendlyComp, friendlyAction].
+        #    Meta+Space = Qt::Key_Space (0x20) | Qt::MetaModifier (0x10000000) = 268435488
+        if command -v gdbus >/dev/null 2>&1; then
+            ACTION_ID="['$KDE_SHORTCUT_DESKTOP','_launch','Toggle Avro/English Input','Toggle Avro/English Input']"
+            gdbus call --session --dest org.kde.kglobalaccel \
+                --object-path /kglobalaccel \
+                --method org.kde.KGlobalAccel.doRegister "$ACTION_ID" >/dev/null 2>&1 || true
+            gdbus call --session --dest org.kde.kglobalaccel \
+                --object-path /kglobalaccel \
+                --method org.kde.KGlobalAccel.setShortcut "$ACTION_ID" '[268435488]' 4 >/dev/null 2>&1 || true
+        fi
+
+        # 3. Also persist via kwriteconfig6 (defensive — kglobalaccel writes
+        #    this itself, but if DBus call failed we still have a valid file
+        #    that takes effect on next login).
+        if command -v kwriteconfig6 >/dev/null 2>&1; then
+            kwriteconfig6 --file kglobalshortcutsrc \
+                --group "$KDE_SHORTCUT_DESKTOP" \
+                --key "_k_friendly_name" "Toggle Avro/English Input" >/dev/null 2>&1 || true
+            kwriteconfig6 --file kglobalshortcutsrc \
+                --group "$KDE_SHORTCUT_DESKTOP" \
+                --key "_launch" "Meta+Space,none,Toggle Avro/English Input" >/dev/null 2>&1 || true
+        fi
+
+        echo "  Super+Space          = toggle Avro / English (KDE kglobalaccel)"
+        echo "  Mechanism: ~/.local/share/applications/$KDE_SHORTCUT_DESKTOP"
+        echo "             → /usr/local/bin/ibus-avro-toggle"
+        echo "  Note: works immediately, no logout required."
+        ;;
+
+    other)
+        # Best-effort: set the IBus trigger. Works on some compositors
+        # (e.g. sway with the right IM module). Won't fire on KDE/GNOME
+        # Wayland but those have their own branches above.
+        gsettings set org.freedesktop.ibus.general.hotkey trigger "['<Super>space']" 2>/dev/null
+        echo "  Super+Space          = IBus trigger (best-effort on this DE)"
+        echo "  If it doesn't switch, your compositor needs a DE-specific binding."
+        ;;
+esac

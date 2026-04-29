@@ -180,24 +180,66 @@ echo ""
 # ============================================================================
 echo "[5/7] Configuring input switching..."
 
+# Detect desktop early so this step can branch the env-file write and toggle install.
+case "$(echo "${XDG_CURRENT_DESKTOP:-}" | tr '[:lower:]' '[:upper:]')" in
+    *GNOME*)  CURRENT_DE=gnome ;;
+    *KDE*)    CURRENT_DE=kde ;;
+    *)        CURRENT_DE=other ;;
+esac
+
+# Install the KDE toggle script (used by setup-wayland.sh's KDE branch via
+# kglobalaccel). Installed system-wide so the .desktop file's Exec= path
+# is valid for any user. Cheap on GNOME — script is tiny and harmless.
+if [ -f "$SCRIPT_DIR/ibus-avro-toggle.sh" ]; then
+    sudo install -m 0755 "$SCRIPT_DIR/ibus-avro-toggle.sh" /usr/local/bin/ibus-avro-toggle
+    ok "Toggle script installed: /usr/local/bin/ibus-avro-toggle"
+fi
+
 bash "$SCRIPT_DIR/setup-wayland.sh"
 
-# Set GTK_IM_MODULE for Wayland/GNOME 50+ (GNOME doesn't set this automatically)
-ENV_DIR="$HOME/.config/environment.d"
-mkdir -p "$ENV_DIR"
-cat > "$ENV_DIR/10-ibus-avro.conf" << 'ENVEOF'
+# IM-module env vars are needed on GNOME 50+ Wayland (GNOME doesn't auto-set
+# them). On KDE Plasma 6 Wayland with text-input-v3, they're redundant —
+# setting them triggers the IBus startup notification ("Please unset
+# QT_IM_MODULE and GTK_IM_MODULE..."). Skip on KDE.
+if [ "$CURRENT_DE" = "gnome" ] || [ "$CURRENT_DE" = "other" ]; then
+    ENV_DIR="$HOME/.config/environment.d"
+    mkdir -p "$ENV_DIR"
+    cat > "$ENV_DIR/10-ibus-avro.conf" << 'ENVEOF'
 GTK_IM_MODULE=ibus
 QT_IM_MODULE=ibus
 XMODIFIERS=@im=ibus
 ENVEOF
-ok "IBus environment variables set for Wayland"
+    ok "IBus environment variables set for Wayland (GNOME/other)"
+else
+    # Clean up any env file from a previous install on this DE
+    rm -f "$HOME/.config/environment.d/10-ibus-avro.conf" 2>/dev/null
+    ok "Skipped IM-module env file on KDE (Plasma 6 text-input-v3 doesn't need it)"
+fi
 echo ""
 
 # ============================================================================
 # Step 6: Restart iBus
 # ============================================================================
 echo "[6/7] Restarting iBus..."
-ibus restart 2>/dev/null || true
+# `ibus restart` kills the daemon and re-launches it directly, which makes
+# ibus-daemon a child of the calling shell — not of ibus-ui-gtk3. On Wayland
+# this triggers the upstream IBus notification:
+#   "'ibus-daemon --panel disable' should be executed as a child process of
+#   ibus-ui-gtk3 component."
+# Restart the systemd user unit instead. That unit's ExecStart launches
+# `ibus-ui-gtk3 --enable-wayland-im --exec-daemon --daemon-args ...`, so
+# the new daemon is properly parented and the notification doesn't fire.
+# The unit name has "GNOME" in it for legacy reasons but it's the universal
+# user-session unit shipped by ibus and used by Kubuntu / Pop / Mint too.
+IBUS_UNIT=org.freedesktop.IBus.session.GNOME.service
+if systemctl --user list-unit-files "$IBUS_UNIT" --no-pager 2>/dev/null | grep -q "$IBUS_UNIT"; then
+    systemctl --user restart "$IBUS_UNIT" 2>/dev/null || true
+    ok "Restarted IBus via $IBUS_UNIT (daemon parented under ibus-ui-gtk3)"
+else
+    # Fallback for systems without the systemd user unit
+    ibus restart 2>/dev/null || true
+    warn "systemd user unit $IBUS_UNIT not found; used 'ibus restart' (may show daemon-parent notification)"
+fi
 sleep 1
 
 # Verify ibus-avro is registered
