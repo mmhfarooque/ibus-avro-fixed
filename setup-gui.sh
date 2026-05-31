@@ -34,7 +34,7 @@ mkdir -p "$HOME/.local/share/applications"
 cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
 Type=Application
-Name=Avro Phonetic Manager
+Name=IBus Avro Manager
 Comment=Configure Avro Phonetic Bangla input method
 Exec=python3 $SCRIPT_DIR/avro-manager.py
 Icon=input-keyboard-symbolic

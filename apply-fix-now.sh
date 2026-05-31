@@ -24,6 +24,14 @@ content = content.replace(
     'if (keycode == 42 || keycode == 54) { return false; }'
 )
 
+# Generic fallback — comment-independent, whitespace/newline tolerant. Only
+# matches if neither specific form above did (e.g. upstream reformatted).
+content = re.sub(
+    r'if\s*\(\s*keycode\s*==\s*42\s*\)\s*\{\s*return\s+true\s*;\s*\}',
+    'if (keycode == 42 || keycode == 54) {\n            return false;\n        }',
+    content
+)
+
 # Disable debug prints
 lines = content.split('\n')
 fixed = []

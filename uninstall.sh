@@ -63,7 +63,6 @@ rm -f "$HOME/.config/autostart/ibus-avro-wayland-fix.desktop"
 rm -f "$HOME/.config/environment.d/10-ibus-avro.conf"
 rm -f "$HOME/.local/share/applications/avro-manager.desktop"
 rm -f "$HOME/.local/share/applications/com.github.mmhfarooque.ibus-avro-toggle.desktop"
-rm -f "$HOME/.local/bin/ibus-avro-toggle"
 rm -rf "$HOME/.config/ibus"
 rm -rf "$HOME/.local/share/avro-manager"
 
@@ -133,15 +132,31 @@ else
 fi
 
 # ============================================================================
-# Step 6: Remove the source directory itself (this script's own home)
+# Step 6: Optionally remove the source directory itself (this script's home)
 # ============================================================================
-# Without this, the cloned repo lingers and blocks a fresh `git clone` to
-# the same path. "Uninstall like it never existed" means the source tree
-# goes too. Bash holds the script in memory once started, so deleting the
-# file under our feet is safe; we cd out first so the shell's CWD is valid.
+# Without this, the cloned repo lingers and can block a fresh `git clone` to
+# the same path. "Uninstall like it never existed" means the source tree can
+# go too — but this is an irreversible `rm -rf`, so we (a) refuse obviously
+# unsafe targets and (b) ask before deleting. Default is NO. Bash holds the
+# script in memory once started, so deleting the file under our feet is safe;
+# we cd out first so the shell's CWD stays valid.
 echo ""
 echo -e "  ${GREEN}Uninstall complete.${NC} IBus is gone."
 echo ""
-echo "Removing source directory: $SCRIPT_DIR"
-cd / && rm -rf "$SCRIPT_DIR"
+
+if [ "$SCRIPT_DIR" = "/" ] || [ "$SCRIPT_DIR" = "$HOME" ] || [ ! -f "$SCRIPT_DIR/install.sh" ]; then
+    warn "Source dir looks unsafe to delete ($SCRIPT_DIR) — leaving it in place."
+else
+    printf "  Also delete the source directory %s ? [y/N] " "$SCRIPT_DIR"
+    read -r _ans
+    case "$_ans" in
+        [Yy]*)
+            cd / && rm -rf "$SCRIPT_DIR"
+            echo "  Source directory removed."
+            ;;
+        *)
+            echo "  Kept source directory: $SCRIPT_DIR"
+            ;;
+    esac
+fi
 echo ""

@@ -47,9 +47,39 @@ logmsg "=== INSTALL STARTING === (v$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || ec
 logmsg "User: $(whoami) | Session: ${XDG_SESSION_TYPE:-unknown}"
 
 if [ "$(id -u)" -eq 0 ]; then
-    fail "Do not run as root. The script will use sudo when needed."
+    fail "Do not run as root. The script escalates with sudo/pkexec when needed."
     exit 1
 fi
+
+# ----------------------------------------------------------------------------
+# Privilege escalation that works from BOTH a terminal and the GUI.
+# ----------------------------------------------------------------------------
+# The root-needing steps below run through "$SUDO". In a terminal (or with
+# cached credentials) that's plain `sudo`, which prompts on the tty.
+#
+# When "Apply All Fixes" launches this from the GUI there is no controlling
+# tty, so `sudo` can't read a password and every step would fail. In that
+# case prefer `sudo -A` with a discovered graphical askpass — it pops ONE
+# dialog and caches the credential for the rest of the run. If no askpass is
+# present, fall back to `pkexec` (graphical auth, but prompts per call).
+# User-level steps (gsettings, ~/.config, systemctl --user) still run as the
+# user — only the apt / /usr / /etc operations are escalated.
+SUDO="sudo"
+if ! { [ -t 0 ] || sudo -n true 2>/dev/null; }; then
+    for _ap in "$SUDO_ASKPASS" /usr/bin/ksshaskpass \
+               /usr/libexec/seahorse/ssh-askpass \
+               /usr/bin/lxqt-openssh-askpass \
+               /usr/bin/ssh-askpass-fullscreen /usr/bin/ssh-askpass; do
+        if [ -n "$_ap" ] && [ -x "$_ap" ]; then
+            export SUDO_ASKPASS="$_ap"; SUDO="sudo -A"; break
+        fi
+    done
+    if [ "$SUDO" = "sudo" ] && command -v pkexec >/dev/null 2>&1; then
+        SUDO="pkexec"
+        warn "No graphical askpass found — using pkexec (may prompt for each step)"
+    fi
+fi
+logmsg "Escalation: SUDO='$SUDO' (tty=$([ -t 0 ] && echo yes || echo no))"
 
 # ============================================================================
 # Step 1: Install ibus-avro base package if not present
@@ -61,19 +91,19 @@ if dpkg -l ibus-avro &>/dev/null 2>&1; then
     FRESH_INSTALL=false
 else
     echo "  Installing ibus-avro and dependencies..."
-    sudo apt update -qq
+    $SUDO apt update -qq
     # ibus-gtk3 / ibus-gtk4 are NOT pulled by ibus-avro alone, and apt's
     # default install of `ibus-avro` skips Recommends in some configs. GTK
     # apps then log "No IM module matching GTK_IM_MODULE=ibus found" and
     # typing silently doesn't work. Install them explicitly.
-    sudo apt install -y ibus-avro ibus-gtk3 ibus-gtk4 gjs gir1.2-gtk-4.0 gir1.2-adw-1 2>&1 | tail -5
+    $SUDO apt install -y ibus-avro ibus-gtk3 ibus-gtk4 gjs gir1.2-gtk-4.0 gir1.2-adw-1 2>&1 | tail -5
     ok "ibus-avro + GTK IM modules installed"
     FRESH_INSTALL=true
 fi
 
 # Defensive: re-ensure ibus-gtk modules + GTK4/libadwaita bindings even on
 # upgrade re-runs (covers users who came in from a partial v2.5.x install)
-sudo apt install -y ibus-gtk3 ibus-gtk4 gir1.2-gtk-4.0 gir1.2-adw-1 2>&1 | tail -2
+$SUDO apt install -y ibus-gtk3 ibus-gtk4 gir1.2-gtk-4.0 gir1.2-adw-1 2>&1 | tail -2
 echo ""
 
 # ============================================================================
@@ -90,7 +120,7 @@ if [ -f "$MAIN_GJS" ]; then
             ok "Shift fix already applied"
         else
             # Replace the entire block (works for both single-line and multi-line)
-            sudo python3 -c "
+            $SUDO python3 -c "
 import re
 with open('$MAIN_GJS') as f:
     content = f.read()
@@ -104,6 +134,14 @@ content = re.sub(
 content = content.replace(
     'if (keycode == 42) { return true; }',
     'if (keycode == 42 || keycode == 54) { return false; }'
+)
+# Generic fallback — comment-independent, whitespace/newline tolerant. Only
+# matches if the two specific forms above didn't (e.g. upstream reformatted).
+# In the normal case the block is already converted, so this is a no-op.
+content = re.sub(
+    r'if\s*\(\s*keycode\s*==\s*42\s*\)\s*\{\s*return\s+true\s*;\s*\}',
+    'if (keycode == 42 || keycode == 54) {\\n            return false;\\n        }',
+    content
 )
 with open('$MAIN_GJS', 'w') as f:
     f.write(content)
@@ -121,7 +159,7 @@ with open('$MAIN_GJS', 'w') as f:
     # Disable ALL debug print statements (keypress, orientation, candidate clicks)
     if grep -qE '^\s*print\s*\(' "$MAIN_GJS"; then
         # Comment out all active print() calls except the IBus bus error message
-        sudo sed -i '/Exiting because IBus/!s|^\(\s*\)print\s*(|\1//print(|' "$MAIN_GJS"
+        $SUDO sed -i '/Exiting because IBus/!s|^\(\s*\)print\s*(|\1//print(|' "$MAIN_GJS"
         ok "Disabled debug logging"
     fi
 else
@@ -135,7 +173,7 @@ echo ""
 echo "[3/7] Installing GTK4 preferences window..."
 
 if [ -f "$SCRIPT_DIR/pref.js" ]; then
-    sudo cp "$SCRIPT_DIR/pref.js" "$INSTALL_DIR/pref.js"
+    $SUDO cp "$SCRIPT_DIR/pref.js" "$INSTALL_DIR/pref.js"
     ok "GTK4/libadwaita preferences installed"
 else
     warn "pref.js not found in $SCRIPT_DIR — skipping GTK4 prefs"
@@ -147,7 +185,7 @@ echo ""
 # ============================================================================
 echo "[4/7] Installing APT hook for persistence..."
 
-sudo tee /usr/local/bin/fix-ibus-avro.sh > /dev/null << 'PATCHSCRIPT'
+$SUDO tee /usr/local/bin/fix-ibus-avro.sh > /dev/null << 'PATCHSCRIPT'
 #!/bin/bash
 # Auto-fix ibus-avro after apt updates
 FILE="/usr/share/ibus-avro/main-gjs.js"
@@ -171,9 +209,9 @@ with open('$FILE', 'w') as f:
 fi
 PATCHSCRIPT
 
-sudo chmod +x /usr/local/bin/fix-ibus-avro.sh
+$SUDO chmod +x /usr/local/bin/fix-ibus-avro.sh
 
-sudo tee /etc/apt/apt.conf.d/99-fix-ibus-avro > /dev/null << 'HOOK'
+$SUDO tee /etc/apt/apt.conf.d/99-fix-ibus-avro > /dev/null << 'HOOK'
 DPkg::Post-Invoke { "/usr/local/bin/fix-ibus-avro.sh || true"; };
 HOOK
 
@@ -196,7 +234,7 @@ esac
 # kglobalaccel). Installed system-wide so the .desktop file's Exec= path
 # is valid for any user. Cheap on GNOME — script is tiny and harmless.
 if [ -f "$SCRIPT_DIR/ibus-avro-toggle.sh" ]; then
-    sudo install -m 0755 "$SCRIPT_DIR/ibus-avro-toggle.sh" /usr/local/bin/ibus-avro-toggle
+    $SUDO install -m 0755 "$SCRIPT_DIR/ibus-avro-toggle.sh" /usr/local/bin/ibus-avro-toggle
     ok "Toggle script installed: /usr/local/bin/ibus-avro-toggle"
 fi
 
@@ -293,7 +331,7 @@ echo ""
 echo "[7/7] Installing GUI Manager..."
 
 # Install Python GTK4 deps (may already be installed from step 1)
-sudo apt install -y python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 2>&1 | tail -2
+$SUDO apt install -y python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 2>&1 | tail -2
 
 chmod +x "$SCRIPT_DIR/avro-manager.py" 2>/dev/null || true
 

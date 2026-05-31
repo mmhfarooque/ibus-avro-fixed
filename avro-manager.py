@@ -17,7 +17,6 @@ import logging
 import logging.handlers
 import os
 import re
-import shlex
 import signal
 import subprocess
 import sys
@@ -92,12 +91,6 @@ def run_cmd(cmd, timeout=10):
     except FileNotFoundError:
         log.error(f"CMD NOT FOUND: {cmd_str}")
         return 1, "", f"Command not found: {cmd[0]}"
-
-
-def run_as_root(cmd_str):
-    """Run a shell command as root via pkexec."""
-    log.info(f"ROOT CMD: {cmd_str}")
-    return run_cmd(["pkexec", "bash", "-c", cmd_str], timeout=120)
 
 
 def is_ibus_running():

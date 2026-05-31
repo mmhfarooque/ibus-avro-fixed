@@ -7,6 +7,26 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.6.0] - 2026-05-31
+
+### Fixed
+- **"Apply All Fixes" from the GUI launcher no longer fails on `sudo`.** `install.sh` did all its root work via plain `sudo`, which needs a controlling terminal. Launched from the app menu (no tty) every privileged step failed silently. The installer now picks a privilege-escalation strategy that works in both contexts: plain `sudo` when run from a terminal (or with cached credentials), `sudo -A` with an auto-discovered graphical askpass otherwise (one dialog, cached for the run), and `pkexec` as a last resort. User-level steps (gsettings, `~/.config`, `systemctl --user`) still run unprivileged — only apt / `/usr` / `/etc` operations escalate. This brings `install.sh` in line with the uninstall path, which already used graphical auth.
+
+### Changed
+- **`uninstall.sh` no longer deletes its own source directory without asking.** The final "remove the cloned repo too" step was an unconditional `rm -rf "$SCRIPT_DIR"`. It now refuses obviously unsafe targets (`/`, `$HOME`, or any dir without an `install.sh`) and prompts before deleting, defaulting to **No**. The rest of the uninstall is unchanged.
+
+### Hardened
+- **Shift-fix patch is more robust to upstream reformatting.** `install.sh` and `apply-fix-now.sh` gained a comment-independent, whitespace/newline-tolerant fallback regex for the keycode-42 → `return false` rewrite. It's purely additive (a no-op once the block is already converted) and only matters if upstream ever changes the formatting of `main-gjs.js`.
+
+### Removed
+- Dead code in `avro-manager.py`: unused `import shlex` and the never-called `run_as_root()` helper.
+- `uninstall.sh` no longer tries to remove `~/.local/bin/ibus-avro-toggle` — the toggle is installed to `/usr/local/bin/` (already cleaned up); the user-bin path was a leftover from an older layout.
+- `setup-gui.sh` desktop entry name corrected from the pre-v2.5.5 "Avro Phonetic Manager" to **"IBus Avro Manager"**, matching `install.sh`.
+
+> **Note:** all of the above are verified for syntax (`bash -n`, `python -m py_compile`) but the runtime behaviour change (GUI escalation, KDE/GNOME flows) still needs a real-hardware smoke test before this is tagged/released.
+
+---
+
 ## [2.5.9] - 2026-04-29
 
 ### Changed
