@@ -11,3 +11,6 @@ install-sh
 missing
 build/
 *.deb
+dist/
+*.rpm
+__pycache__/

@@ -96,7 +96,9 @@ else
     # default install of `ibus-avro` skips Recommends in some configs. GTK
     # apps then log "No IM module matching GTK_IM_MODULE=ibus found" and
     # typing silently doesn't work. Install them explicitly.
-    $SUDO apt install -y ibus-avro ibus-gtk3 ibus-gtk4 gjs gir1.2-gtk-4.0 gir1.2-adw-1 2>&1 | tail -5
+    # fonts-beng pulls a Bangla Unicode font so typed text renders as glyphs
+    # instead of tofu boxes — the engine emits Unicode, the font draws it.
+    $SUDO apt install -y ibus-avro ibus-gtk3 ibus-gtk4 gjs gir1.2-gtk-4.0 gir1.2-adw-1 fonts-beng 2>&1 | tail -5
     ok "ibus-avro + GTK IM modules installed"
     FRESH_INSTALL=true
 fi

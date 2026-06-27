@@ -7,6 +7,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.7.0] - 2026-06-27
+
+### Added
+- **Bangla Unicode font is now pulled in automatically.** The engine emits Unicode codepoints, but those only render if a Bengali font is installed — previously a fresh install on a font-less system showed tofu boxes until the user manually downloaded a font. Every install path now depends on a Bangla Unicode font: `install.sh` and the `.deb` add `fonts-beng`; the new `.rpm` and `setup-gui.sh`'s dnf branch require `google-noto-sans-bengali-fonts`; the pacman branch adds `noto-fonts`.
+- **First RPM packaging (openSUSE / Fedora).** `packaging/ibus-avro-fixed.spec` builds a `noarch` `.rpm` that installs the already-fixed engine, IBus component, GSettings schema, GTK4 preferences and KDE toggle. It `Provides`/`Conflicts` `ibus-avro`, compiles schemas in `%post`, and pulls the Bangla font — closing the long-standing "apt-only" gap for rpm distros. The apt persistence hook is intentionally omitted (the Shift fix is baked into the packaged source).
+
+### Changed
+- **`setup-gui.sh` now covers openSUSE.** Added a `zypper` branch alongside apt/dnf/pacman so the GUI dependencies (and the Bangla font) install on SUSE-family systems too.
+
+> **Note:** the RPM is built and verified (`rpm -qlp`, dependency resolution) but, like v2.6.0, the end-to-end runtime behaviour still wants a real-hardware smoke test before this is tagged/released.
+
+---
+
 ## [2.6.0] - 2026-05-31
 
 ### Fixed

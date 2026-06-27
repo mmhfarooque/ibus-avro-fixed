@@ -109,7 +109,7 @@ Version: $VERSION
 Section: utils
 Priority: optional
 Architecture: all
-Depends: gjs, ibus, dconf-gsettings-backend | gsettings-backend, gir1.2-gtk-4.0, gir1.2-adw-1
+Depends: gjs, ibus, dconf-gsettings-backend | gsettings-backend, gir1.2-gtk-4.0, gir1.2-adw-1, fonts-beng
 Conflicts: ibus-avro
 Replaces: ibus-avro
 Provides: ibus-avro
@@ -125,6 +125,7 @@ Description: Avro Phonetic Bangla input method for IBus — Fixed Edition
  - Wayland input switching support (Super+Space)
  - APT hook to re-apply fixes after system updates
  - Debug keypress logging disabled
+ - Pulls a Bangla Unicode font (fonts-beng) so text renders, not tofu
  .
  Based on sarim/ibus-avro. Licensed under MPL 2.0.
 EOF
