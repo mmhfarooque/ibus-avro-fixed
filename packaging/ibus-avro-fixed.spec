@@ -6,7 +6,7 @@
 ####################################################################
 
 Name:           ibus-avro-fixed
-Version:        2.7.0
+Version:        2.7.1
 Release:        1%{?dist}
 Summary:        Avro Phonetic Bangla input method for IBus (fixed fork)
 
@@ -75,8 +75,12 @@ return "%{pkgdir}";
 EOF
 
 # Render the IBus component + setup desktop file from their .in templates.
-sed "s|\${pkgdatadir}|%{pkgdir}|g" ibus-avro.xml.in > ibus-avro.xml
-sed "s|\${pkgdatadir}|%{pkgdir}|g" ibus-setup-ibus-avro.desktop.in > ibus-setup-ibus-avro.desktop
+# The .in files use shell-escaped quotes (\") because upstream's Makefile
+# processes them through `eval "echo …"`, which unescapes them. We substitute
+# with sed, so we must ALSO unescape \" -> " ourselves, or IBus gets malformed
+# XML it can't parse and the engine never registers.
+sed -e "s|\${pkgdatadir}|%{pkgdir}|g" -e 's/\\"/"/g' ibus-avro.xml.in > ibus-avro.xml
+sed -e "s|\${pkgdatadir}|%{pkgdir}|g" -e 's/\\"/"/g' ibus-setup-ibus-avro.desktop.in > ibus-setup-ibus-avro.desktop
 
 # Strip leftover debug print() calls (same transform install.sh applies on
 # apt systems), keeping the meaningful "IBus bus not found" message.
@@ -149,6 +153,13 @@ glib-compile-schemas %{_datadir}/glib-2.0/schemas &>/dev/null || :
 %{_datadir}/applications/ibus-setup-ibus-avro.desktop
 
 %changelog
+* Sat Jun 27 2026 Mahmud Farooque <farooque7@gmail.com> - 2.7.1-1
+- Fix malformed IBus component XML: the .in templates use shell-escaped
+  quotes for upstream's eval-echo Makefile rule, but the sed render left
+  literal \" in ibus-avro.xml, so IBus failed to parse it and the engine
+  never appeared in input-source discovery. Now unescape \" -> " on render
+  (spec %build and packaging/build-deb.sh both fixed).
+
 * Sat Jun 27 2026 Mahmud Farooque <farooque7@gmail.com> - 2.7.0-1
 - Add Bangla Unicode font dependency (google-noto-sans-bengali-fonts) so a
   fresh install renders Bangla out of the box — no manual font download.

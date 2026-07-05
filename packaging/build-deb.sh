@@ -60,15 +60,17 @@ EVARS
 # UI file (kept for backwards compat, though GTK4 prefs don't use it)
 cp "$PROJECT_DIR/avropref.ui" "$PKG_DIR/$INSTALL_DIR/" 2>/dev/null || true
 
-# IBus component XML
-sed "s|\${pkgdatadir}|/usr/share/ibus-avro|g" "$PROJECT_DIR/ibus-avro.xml.in" \
+# IBus component XML. The .in uses shell-escaped quotes (\") for upstream's
+# `eval echo` Makefile rule; sed doesn't unescape, so we do it here too — else
+# IBus gets malformed XML and the engine never registers.
+sed -e "s|\${pkgdatadir}|/usr/share/ibus-avro|g" -e 's/\\"/"/g' "$PROJECT_DIR/ibus-avro.xml.in" \
     > "$PKG_DIR/usr/share/ibus/component/ibus-avro.xml"
 
 # GSettings schema
 cp "$PROJECT_DIR/com.omicronlab.avro.gschema.xml" "$PKG_DIR/usr/share/glib-2.0/schemas/"
 
 # Desktop file
-sed "s|\${pkgdatadir}|/usr/share/ibus-avro|g" "$PROJECT_DIR/ibus-setup-ibus-avro.desktop.in" \
+sed -e "s|\${pkgdatadir}|/usr/share/ibus-avro|g" -e 's/\\"/"/g' "$PROJECT_DIR/ibus-setup-ibus-avro.desktop.in" \
     > "$PKG_DIR/usr/share/applications/ibus-setup-ibus-avro.desktop"
 
 # Metainfo

@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.7.1] - 2026-06-27
+
+### Fixed
+- **Malformed IBus component XML in the packaged builds — Avro never appeared in input-source discovery.** `ibus-avro.xml.in` (and the desktop `.in`) use shell-escaped quotes (`\"`) because upstream's Makefile renders them through `eval "echo …"`, which unescapes them. The RPM spec and `packaging/build-deb.sh` rendered the templates with a plain `sed` path-substitution that left the literal `\"` in place, so `/usr/share/ibus/component/ibus-avro.xml` was invalid XML and IBus silently skipped the component. Both renderers now unescape `\" → "`. (Only surfaced with the from-scratch RPM/DEB component file — the apt path uses the distro `ibus-avro` package's own valid XML.)
+
+---
+
 ## [2.7.0] - 2026-06-27
 
 ### Added
